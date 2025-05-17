@@ -10,6 +10,9 @@ import inspect
 import re
 import sys
 
+import ssl
+import certifi
+ssl_context = ssl.create_default_context(cafile=certifi.where())
 
 # ANSI エスケープシーケンスを除去する Formatter
 class NoColorFormatter(logging.Formatter):
