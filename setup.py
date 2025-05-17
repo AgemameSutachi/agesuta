@@ -13,9 +13,9 @@ setup(
     install_requires=[      # このパッケージが依存する外部ライブラリ
         'certifi>=2025.4.26',
         'chardet>=5.2.0',
-        'charset>=ormalizer==3.4.2',
+        'charset-normalizer>=3.4.2',
         'idna>=3.10',
-        'markdown>=t-py==3.0.0',
+        'markdown-it-py>=3.0.0',
         'mdurl>=0.1.2',
         'Pygments>=2.19.1',
         'requests>=2.32.3',
