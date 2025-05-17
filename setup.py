@@ -8,7 +8,7 @@ def read(fname):
 
 setup(
     name='agesuta',  # パッケージ名 (pip install時に使われる名前)
-    version='0.1.0',      # パッケージのバージョン
+    version='0.1.1',      # パッケージのバージョン
     packages=find_packages(), # ディレクトリをパッケージとして自動検出
     install_requires=[      # このパッケージが依存する外部ライブラリ
         'certifi>=2025.4.26',
