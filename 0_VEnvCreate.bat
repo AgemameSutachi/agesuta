@@ -21,6 +21,7 @@ if exist %UserProfile%\temp\venv\%THIS_DIRECTORY% (
         call %UserProfile%\temp\venv\%THIS_DIRECTORY%\Scripts\Activate.bat
         echo アクティベート完了
         cd /d %~dp0
+        pip install -U certifi
         pip freeze >requirements.txt
         echo ライブラリインストール完了
         call deactivate

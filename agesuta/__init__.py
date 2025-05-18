@@ -1,20 +1,21 @@
 from .com import log_decorator,CustomLogger
 from .configmanager import ConfigManager
-from .slackapi import textpost,imagepost,imagepost_from_url
-
-__version__ = '0.1.2'
+from .slackapi import SlackPoster
 
 __all__ = [
     'log_decorator',
     'CustomLogger',
     'ConfigManager',
-    'textpost',
-    'imagepost',
-    'imagepost_from_url',
-    # __version__ は通常 __all__ に含めませんが、アクセスしたい場合は含めることもあります
+    'SlackPoster',
 ]
+
+with open("version.txt","r") as f:
+    version=f.read().replace("\n","")
+    
+with open("date.txt","r") as f:
+    date=f.read().replace("\n","")
 
 __author__  = "Sutachi Agemame <sutachiagemame@gmail.com>"
 __status__  = "production"
-__version__ = "0.1.2"
-__date__    = "2025/05/18"
+__version__ = version
+__date__    = date

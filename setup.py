@@ -6,9 +6,12 @@ import os
 def read(fname):
     return open(os.path.join(os.path.dirname(__file__), fname), encoding='utf-8').read()
 
+with open("agesuta\\version.txt","r") as f:
+    version=f.read().replace("\n","")
+
 setup(
     name='agesuta',  # パッケージ名 (pip install時に使われる名前)
-    version='0.1.2',      # パッケージのバージョン
+    version=version,      # パッケージのバージョン
     packages=find_packages(), # ディレクトリをパッケージとして自動検出
     install_requires=[      # このパッケージが依存する外部ライブラリ
         'certifi>=2025.4.26',

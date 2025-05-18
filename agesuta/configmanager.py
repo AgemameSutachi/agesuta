@@ -1,45 +1,36 @@
-from com import log_decorator, CustomLogger
+from .com import log_decorator, CustomLogger
 import logging
-import ssl
-import certifi
-
-if __name__ == "__main__":
-    Cl_logger=CustomLogger(flag_datelog = False,dir_path = "./Log",log_encode = "utf-8",maxBytes = 10 * 1024 * 1024,backupCount = 10,showlevel = "INFO")
-    Cl_logger.log_main()
-logger = logging.getLogger(__name__)
-ssl_context = ssl.create_default_context(cafile=certifi.where())
-
 import os
 import configparser
 from pathlib import Path
-
 class ConfigManager:
     """設定ファイルを管理するクラス"""
 
-    @log_decorator(logger)
     def __init__(
         self,
         default_dic: dict,
         type_dic: dict = {},
         config_path: str = os.path.basename(os.getcwd()) + ".ini",
         encoding: str = "utf-8",
+        logger_instance = logging.getLogger(__name__)
     ):
         self.default_dic_initial = default_dic.copy()
         self.config_dic = {}  # 型変換後の値を格納
         self.type_dic = type_dic
         self.config_path = str(Path(config_path).absolute())
         self.encoding = encoding
+        self.logger = logger_instance
 
         # config_dic のキーの順序を default_dic_initial に合わせる
         for key in self.default_dic_initial.keys():
             self.config_dic[key] = None # プレースホルダー
 
         if not os.path.exists(self.config_path):
-            logger.info(f"設定ファイルが見つかりません。テンプレートを作成します: {self.config_path}")
+            self.logger.info(f"設定ファイルが見つかりません。テンプレートを作成します: {self.config_path}")
             self._apply_type_to_initial_defaults()
             self.config_generator()
         else:
-            logger.info(f"設定ファイルを読み込みます: {self.config_path}")
+            self.logger.info(f"設定ファイルを読み込みます: {self.config_path}")
             self._load_config()
 
     def _apply_type_to_initial_defaults(self):
@@ -62,7 +53,7 @@ class ConfigManager:
             else:
                 # type_dic に定義がない場合は、そのままの値を使用
                 self.config_dic[key] = default_raw_value
-            logger.debug(f"初期デフォルト適用: {key}: {self.config_dic.get(key)} (型: {type(self.config_dic.get(key)).__name__})")
+            self.logger.debug(f"初期デフォルト適用: {key}: {self.config_dic.get(key)} (型: {type(self.config_dic.get(key)).__name__})")
 
 
     def _load_config(self):
@@ -71,11 +62,11 @@ class ConfigManager:
         try:
             read_files = config_ini.read(self.config_path, encoding=self.encoding)
             if not read_files:
-                logger.warning(f"設定ファイル {self.config_path} が読み込めませんでした。初期デフォルト値を使用します。")
+                self.logger.warning(f"設定ファイル {self.config_path} が読み込めませんでした。初期デフォルト値を使用します。")
                 self._apply_type_to_initial_defaults() # 初期デフォルトを適用
                 return
         except configparser.Error as e:
-            logger.error(f"設定ファイル {self.config_path} の解析エラー: {e}。初期デフォルト値を使用します。")
+            self.logger.error(f"設定ファイル {self.config_path} の解析エラー: {e}。初期デフォルト値を使用します。")
             self._apply_type_to_initial_defaults() # 初期デフォルトを適用
             return
 
@@ -90,7 +81,7 @@ class ConfigManager:
             if self.type_dic and key in self.type_dic:
                 expected_type = self.type_dic[key]
                 if not isinstance(initial_default_typed_value, expected_type):
-                     # 初期デフォルトも念のため型変換（既に _apply_type_to_initial_defaults で行われているはずだが、安全のため）
+                    # 初期デフォルトも念のため型変換（既に _apply_type_to_initial_defaults で行われているはずだが、安全のため）
                     fallback_value_for_key = self._convert_value(str(initial_default_typed_value), expected_type, key, initial_default_typed_value)
 
 
@@ -102,10 +93,10 @@ class ConfigManager:
                     # 型定義がない場合はファイルからの文字列をそのまま使用
                     self.config_dic[key] = value_from_file_str
             else: # 設定ファイルにキーが存在しない場合
-                logger.info(f"キー '{key}' が設定ファイルにありません。初期デフォルト値 (型適用後) '{fallback_value_for_key}' を使用します。")
+                self.logger.info(f"キー '{key}' が設定ファイルにありません。初期デフォルト値 (型適用後) '{fallback_value_for_key}' を使用します。")
                 self.config_dic[key] = fallback_value_for_key
             
-            logger.info(f"読み込み後: {key}: {self.config_dic.get(key)} (型: {type(self.config_dic.get(key)).__name__})")
+            self.logger.info(f"読み込み後: {key}: {self.config_dic.get(key)} (型: {type(self.config_dic.get(key)).__name__})")
         
         # default_dic_initial にはなく、ファイルにのみ存在する設定の扱い (オプション)
         for key_in_file in read_section.keys():
@@ -118,12 +109,12 @@ class ConfigManager:
                     converted = self._convert_value(value_str, expected_type, key_in_file, None) # フォールバックはNone
                     if converted is not None: # 変換成功時のみ（Noneが有効な値でない場合）
                         self.config_dic[key_in_file] = converted
-                        logger.info(f"ファイルから追加読込 (型変換有): {key_in_file}: {converted} (型: {type(converted).__name__})")
+                        self.logger.info(f"ファイルから追加読込 (型変換有): {key_in_file}: {converted} (型: {type(converted).__name__})")
                     else:
-                        logger.warning(f"ファイルにのみ存在するキー '{key_in_file}' の値 '{value_str}' を型 '{expected_type.__name__}' に変換できませんでした。スキップします。")
+                        self.logger.warning(f"ファイルにのみ存在するキー '{key_in_file}' の値 '{value_str}' を型 '{expected_type.__name__}' に変換できませんでした。スキップします。")
                 else:
                     self.config_dic[key_in_file] = value_str # 型定義なしなら文字列
-                    logger.info(f"ファイルから追加読込 (型定義なし): {key_in_file}: {value_str} (型: {type(value_str).__name__})")
+                    self.logger.info(f"ファイルから追加読込 (型定義なし): {key_in_file}: {value_str} (型: {type(value_str).__name__})")
 
 
     def _convert_value(self, value_str: str, expected_type, key: str, fallback_value):
@@ -151,31 +142,31 @@ class ConfigManager:
             #     raise ValueError("リストとして解釈できません。例: '[item1, item2]'")
             else:
                 # サポートされていない型定義の場合
-                logger.warning(
+                self.logger.warning(
                     f"キー '{key}' の値 '{value_str}' に対する型 '{expected_type.__name__}' の自動変換は未サポートです。"
                     f"フォールバック値 '{fallback_value}' (型: {type(fallback_value).__name__}) を使用します。"
                 )
                 return fallback_value
         except ValueError as ve: # int(), float(), bool() および手動raise ValueError
-            logger.warning(
+            self.logger.warning(
                 f"設定値 '{key}'='{value_str}' の型変換失敗 ({ve})。期待型: {expected_type.__name__}。 "
                 f"フォールバック値 '{fallback_value}' (型: {type(fallback_value).__name__}) を使用します。"
             )
             return fallback_value
         except Exception as e: # その他の予期せぬエラー
-            logger.error(
+            self.logger.error(
                 f"設定値 '{key}'='{value_str}' の型変換中に予期せぬエラー ({type(e).__name__}: {e})。 "
                 f"フォールバック値 '{fallback_value}' (型: {type(fallback_value).__name__}) を使用します。"
             )
             return fallback_value
 
-    @log_decorator(logger)
+    
     def reload(self):
-        logger.debug(f"設定ファイルをリロードします: {self.config_path}")
+        self.logger.debug(f"設定ファイルをリロードします: {self.config_path}")
         old_config_dic_snapshot = self.config_dic.copy()
 
         if not os.path.exists(self.config_path):
-            logger.warning(f"リロード試行時、設定ファイル {self.config_path} が見つかりません。")
+            self.logger.warning(f"リロード試行時、設定ファイル {self.config_path} が見つかりません。")
             # ファイルがない場合、元のコードではテンプレート作成を行っていた。
             # 初期デフォルト値で再初期化し、ファイルも生成する。
             self._apply_type_to_initial_defaults()
@@ -190,19 +181,19 @@ class ConfigManager:
             new_value = self.config_dic.get(key)
             # repr() を使うと型情報がより明確になることがある（特に文字列と数値）
             if old_value != new_value or type(old_value) != type(new_value):
-                logger.info(
+                self.logger.info(
                     f"設定変更 key=[{key}]: {repr(old_value)} (型: {type(old_value).__name__}) "
                     f"→ {repr(new_value)} (型: {type(new_value).__name__})"
                 )
 
-    @log_decorator(logger)
+    
     def config_generator(self):
         """現在の self.config_dic の内容を設定ファイルに書き出す。"""
         try:
             dir_name = os.path.dirname(self.config_path)
             if dir_name and not os.path.exists(dir_name):
                 os.makedirs(dir_name, exist_ok=True)
-                logger.info(f"保存先ディレクトリを作成しました: {dir_name}")
+                self.logger.info(f"保存先ディレクトリを作成しました: {dir_name}")
             
             config = configparser.ConfigParser()
             config.optionxform = str # キーの大文字・小文字を保持
@@ -214,12 +205,12 @@ class ConfigManager:
             
             with open(self.config_path, "w", encoding=self.encoding) as configfile:
                 config.write(configfile)
-            logger.info(f"設定ファイルを生成/更新しました: {self.config_path}")
+            self.logger.info(f"設定ファイルを生成/更新しました: {self.config_path}")
         except IOError as e:
-            logger.error(f"設定ファイルの書き込みに失敗しました: {self.config_path}, IOエラー: {e}")
+            self.logger.error(f"設定ファイルの書き込みに失敗しました: {self.config_path}, IOエラー: {e}")
             raise
         except Exception as e:
-            logger.error(f"設定ファイルの作成中に予期せぬエラーが発生しました: {self.config_path}, エラー: {e}")
+            self.logger.error(f"設定ファイルの作成中に予期せぬエラーが発生しました: {self.config_path}, エラー: {e}")
             raise
 
     def get(self, key: str, default_override=None):
@@ -236,7 +227,7 @@ class ConfigManager:
         """現在の全ての設定値 (型変換後) のコピーを返す。"""
         return self.config_dic.copy()
 
-    @log_decorator(logger)
+    
     def set(self, key: str, value_to_set):
         """
         設定値をメモリ上に設定する。type_dic に基づいて型チェックと変換を試みる。
@@ -259,11 +250,11 @@ class ConfigManager:
             if isinstance(converted_value, expected_type):
                 if self.config_dic.get(key) != converted_value : # 値が実際に変更される場合のみログ出力と更新
                     self.config_dic[key] = converted_value
-                    logger.info(f"設定値セット (型変換/検証済): key='{key}', value={repr(converted_value)} (入力: {repr(value_to_set)})")
+                    self.logger.info(f"設定値セット (型変換/検証済): key='{key}', value={repr(converted_value)} (入力: {repr(value_to_set)})")
                 else:
-                    logger.debug(f"設定値セット試行 (変更なし): key='{key}', value={repr(converted_value)}")
+                    self.logger.debug(f"設定値セット試行 (変更なし): key='{key}', value={repr(converted_value)}")
             else:
-                logger.warning(
+                self.logger.warning(
                     f"キー '{key}' に値 {repr(value_to_set)} (入力型: {type(value_to_set).__name__}) をセット試行しましたが、"
                     f"期待型 '{expected_type.__name__}' への変換結果が不正です (結果: {repr(converted_value)}, 型: {type(converted_value).__name__})。"
                     "値は変更されません。"
@@ -271,18 +262,18 @@ class ConfigManager:
         else: # type_dic にキーがない (型定義がない) 場合
             if self.config_dic.get(key) != value_to_set:
                 self.config_dic[key] = value_to_set
-                logger.info(f"設定値セット (型定義なし): key='{key}', value={repr(value_to_set)}")
+                self.logger.info(f"設定値セット (型定義なし): key='{key}', value={repr(value_to_set)}")
             else:
-                 logger.debug(f"設定値セット試行 (型定義なし, 変更なし): key='{key}', value={repr(value_to_set)}")
+                self.logger.debug(f"設定値セット試行 (型定義なし, 変更なし): key='{key}', value={repr(value_to_set)}")
         
         # default_dic_initial にない新しいキーがセットされた場合にも対応
         if key not in self.default_dic_initial and key in self.config_dic:
-            logger.info(f"キー '{key}' は初期デフォルト辞書にない新しいキーとして設定/更新されました。")
+            self.logger.info(f"キー '{key}' は初期デフォルト辞書にない新しいキーとして設定/更新されました。")
 
-    @log_decorator(logger)
+    
     def save(self):
         """現在の設定をファイルに保存する。"""
-        logger.info(f"設定をファイルに保存します: {self.config_path}")
+        self.logger.info(f"設定をファイルに保存します: {self.config_path}")
         self.config_generator()
 
 # === 以下、テスト用のコード (ConfigManagerクラス定義の外) ===
