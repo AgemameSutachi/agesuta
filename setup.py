@@ -10,7 +10,8 @@ def read(fname):
 # Windowsの場合は "agesuta\\version.txt"
 # Linux/macOSの場合は "agesuta/version.txt"
 # os.path.joinを使うとクロスプラットフォームに対応できます
-version_file_path = os.path.join("agesuta", "version.txt")
+_package_dir = os.path.dirname(__file__)
+version_file_path = os.path.join(_package_dir,"agesuta", "version.txt")
 
 with open(version_file_path, "r") as f:
     version=f.read().replace("\n","").strip() # 空白文字も削除するようstrip()を追加
