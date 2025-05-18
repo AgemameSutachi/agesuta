@@ -9,10 +9,11 @@ from chardet.universaldetector import UniversalDetector
 import inspect
 import re
 import sys
-
 import ssl
 import certifi
+
 ssl_context = ssl.create_default_context(cafile=certifi.where())
+
 
 # ANSI エスケープシーケンスを除去する Formatter
 class NoColorFormatter(logging.Formatter):
@@ -150,7 +151,7 @@ class CustomLogger:
                 "WDM",
                 "oauthlib.oauth1.rfc5849",
                 "requests_oauthlib.oauth1_auth",
-                "httpx"
+                "httpx",
             ]
             for name in logger_names:
                 logging.getLogger(name).setLevel(logging.ERROR)
