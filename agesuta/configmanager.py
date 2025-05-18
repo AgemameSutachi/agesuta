@@ -31,7 +31,7 @@ class ConfigManager:
             self.config_generator()
         else:
             self.logger.info(f"設定ファイルを読み込みます: {self.config_path}")
-            self._load_config()
+            self._load_config(flag_first=True)
 
     def _apply_type_to_initial_defaults(self):
         """
@@ -56,7 +56,7 @@ class ConfigManager:
             self.logger.debug(f"初期デフォルト適用: {key}: {self.config_dic.get(key)} (型: {type(self.config_dic.get(key)).__name__})")
 
 
-    def _load_config(self):
+    def _load_config(self,flag_first=False):
         """設定ファイルを読み込み、型チェックと変換を行い self.config_dic を更新する。"""
         config_ini = configparser.ConfigParser()
         try:
@@ -96,7 +96,10 @@ class ConfigManager:
                 self.logger.info(f"キー '{key}' が設定ファイルにありません。初期デフォルト値 (型適用後) '{fallback_value_for_key}' を使用します。")
                 self.config_dic[key] = fallback_value_for_key
             
-            self.logger.info(f"読み込み後: {key}: {self.config_dic.get(key)} (型: {type(self.config_dic.get(key)).__name__})")
+            if flag_first:
+                self.logger.info(f"読み込み後: {key}: {self.config_dic.get(key)} (型: {type(self.config_dic.get(key)).__name__})")
+            else:
+                self.logger.debug(f"読み込み後: {key}: {self.config_dic.get(key)} (型: {type(self.config_dic.get(key)).__name__})")
         
         # default_dic_initial にはなく、ファイルにのみ存在する設定の扱い (オプション)
         for key_in_file in read_section.keys():
@@ -172,7 +175,7 @@ class ConfigManager:
             self._apply_type_to_initial_defaults()
             self.config_generator()
         else:
-            self._load_config() # ファイル読み込みと型変換
+            self._load_config(flag_first=False) # ファイル読み込みと型変換
 
         # 変更点のログ出力
         all_keys = set(old_config_dic_snapshot.keys()) | set(self.config_dic.keys())
