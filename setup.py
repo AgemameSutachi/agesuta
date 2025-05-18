@@ -6,12 +6,18 @@ import os
 def read(fname):
     return open(os.path.join(os.path.dirname(__file__), fname), encoding='utf-8').read()
 
-with open("agesuta\\version.txt","r") as f:
-    version=f.read().replace("\n","")
+# version.txtのパスを環境に合わせて指定
+# Windowsの場合は "agesuta\\version.txt"
+# Linux/macOSの場合は "agesuta/version.txt"
+# os.path.joinを使うとクロスプラットフォームに対応できます
+version_file_path = os.path.join("agesuta", "version.txt")
+
+with open(version_file_path, "r") as f:
+    version=f.read().replace("\n","").strip() # 空白文字も削除するようstrip()を追加
 
 setup(
     name='agesuta',  # パッケージ名 (pip install時に使われる名前)
-    version=version,      # パッケージのバージョン
+    version=version,        # パッケージのバージョン
     packages=find_packages(), # ディレクトリをパッケージとして自動検出
     install_requires=[      # このパッケージが依存する外部ライブラリ
         'certifi>=2025.4.26',
@@ -30,8 +36,8 @@ setup(
     long_description=read('README.md'), # README.mdを詳細な説明として使用
     long_description_content_type='text/markdown', # long_descriptionの形式を指定
     url='https://github.com/AgemameSutachi/agesuta', # プロジェクトのリポジトリURL (任意)
-    author='AgemameSutachi',      # 作者名 (任意)
-    author_email='your.email@example.com', # 作者のメールアドレス (任意)
+    author='AgemameSutachi',        # 作者名 (任意)
+    author_email='sutachiagemame@gmail.com', # 作者のメールアドレス (任意)
     license='MIT', # ライセンス (LICENSE ファイルを作成した場合)
     classifiers=[           # PyPIでの分類 (任意だが推奨)
         'Development Status :: 3 - Alpha',
@@ -51,4 +57,9 @@ setup(
     ],
     keywords='logging custom logger rich file rotation slack requests utility', # PyPIでの検索キーワード (更新)
     python_requires='>=3.6', # 必須Pythonバージョン
+
+    # ここに package_data を追加します
+    package_data={
+        'agesuta': ['date.txt','version.txt'],
+    },
 )
