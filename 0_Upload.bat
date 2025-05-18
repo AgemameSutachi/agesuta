@@ -54,19 +54,15 @@ if exist "%VENV_PATH%" (
             exit /b 1
         )
 
-        echo aaa
         echo Version read: !VERSION!
-        echo bbb
-        pause
 
         rem 元のビルド関連コマンド
         cd /d %~dp0
-        echo Cleaning build directory...
-        rem rm -rf build  <-- Unix/Linuxコマンドのためコメントアウト
-        rmdir /s /q build  rem <-- Windowsでディレクトリを削除するコマンド
+        echo Cleaning dist directory...
+        rmdir /s /q dist
         rem /s: サブディレクトリを含むすべてのファイルとサブディレクトリを削除
         rem /q: 確認メッセージを表示しない（クワイエットモード）
-        rem build: 削除対象のディレクトリ名
+        rem dist: 削除対象のディレクトリ名
 
         echo Building sdist...
         python setup.py sdist
@@ -133,10 +129,8 @@ if exist "%VENV_PATH%" (
     ) else (
         echo エラー: アクティベートスクリプトが見つかりません: "%VENV_PATH%\Scripts\Activate.bat"
     )
-    rem venvパスをクリップボードにコピー (PowerShellが必要)
-    echo PowerShellを使用してvenvパスをクリップボードにコピーします...
-    echo "%VENV_PATH%\Scripts\activate.ps1" | clip
-    echo クリップボードにコピーしました。
+    echo 完了
+
 ) else (
     echo 環境なし: "%VENV_PATH%"
     echo venvを作成するには、手動で `python -m venv "%VENV_PATH%"` を実行してください。
