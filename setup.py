@@ -14,9 +14,11 @@ def read(fname):
 # os.path.joinを使うとクロスプラットフォームに対応できます
 _package_dir = os.path.dirname(__file__)
 version_file_path = os.path.join(_package_dir, "agesuta", "version.txt")
-
-with open(version_file_path, "r") as f:
-    version = f.read().replace("\n", "").strip()  # 空白文字も削除するようstrip()を追加
+if os.path.exists(version_file_path):
+    with open(version_file_path, "r") as f:
+        version = f.read().replace("\n", "")
+else:
+    version = None
 
 setup(
     name="agesuta",  # パッケージ名 (pip install時に使われる名前)
