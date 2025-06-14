@@ -64,7 +64,9 @@ class ConfigManager:
             )
 
     def _load_config(self, flag_first=False):
-        """設定ファイルを読み込み、型チェックと変換を行い self.config_dic を更新する。"""
+        """設定ファイルを読み込み、型チェックと変換を行い self.config_dic を更新する。
+        環境変数が設定されている場合は、INIファイルやデフォルト値よりも優先する。
+        """
         config_ini = configparser.ConfigParser()
         try:
             read_files = config_ini.read(self.config_path, encoding=self.encoding)
@@ -73,98 +75,148 @@ class ConfigManager:
                     f"設定ファイル {self.config_path} が読み込めませんでした。初期デフォルト値を使用します。"
                 )
                 self._apply_type_to_initial_defaults()  # 初期デフォルトを適用
-                return
+                # 環境変数の適用はここでも行われる
+            else:
+                read_section = config_ini["DEFAULT"] if "DEFAULT" in config_ini else {}
+
+                for key in self.default_dic_initial.keys():
+                    value_from_file_str = read_section.get(
+                        key
+                    )  # INIファイルからは文字列として取得
+                    initial_default_typed_value = self.default_dic_initial[
+                        key
+                    ]  # 元のdefault_dicの値
+
+                    # フォールバック先の値として、まずは初期デフォルト値を型変換したものを用意
+                    fallback_value_for_key = initial_default_typed_value
+                    if self.type_dic and key in self.type_dic:
+                        expected_type = self.type_dic[key]
+                        if not isinstance(initial_default_typed_value, expected_type):
+                            # 初期デフォルトも念のため型変換（既に _apply_type_to_initial_defaults で行われているはずだが、安全のため）
+                            fallback_value_for_key = self._convert_value(
+                                str(initial_default_typed_value),
+                                expected_type,
+                                key,
+                                initial_default_typed_value,  # fallback is the original value if conversion fails
+                            )
+
+                    if (
+                        value_from_file_str is not None
+                    ):  # 設定ファイルにキーが存在する場合
+                        if self.type_dic and key in self.type_dic:
+                            expected_type = self.type_dic[key]
+                            self.config_dic[key] = self._convert_value(
+                                value_from_file_str,
+                                expected_type,
+                                key,
+                                fallback_value_for_key,
+                            )
+                        else:
+                            # 型定義がない場合はファイルからの文字列をそのまま使用
+                            self.config_dic[key] = value_from_file_str
+                    else:  # 設定ファイルにキーが存在しない場合
+                        self.logger.info(
+                            f"キー '{key}' が設定ファイルにありません。初期デフォルト値 (型適用後) '{fallback_value_for_key}' を使用します。"
+                        )
+                        self.config_dic[key] = fallback_value_for_key
         except configparser.Error as e:
             self.logger.error(
                 f"設定ファイル {self.config_path} の解析エラー: {e}。初期デフォルト値を使用します。"
             )
             self._apply_type_to_initial_defaults()  # 初期デフォルトを適用
-            return
+            # 環境変数の適用はここでも行われる
 
-        read_section = config_ini["DEFAULT"] if "DEFAULT" in config_ini else {}
-
+        # 環境変数の読み込みと優先適用
         for key in self.default_dic_initial.keys():
-            value_from_file_str = read_section.get(
-                key
-            )  # INIファイルからは文字列として取得
-            initial_default_typed_value = self.default_dic_initial[
-                key
-            ]  # 元のdefault_dicの値
+            env_var_value = os.getenv(
+                key.upper()
+            )  # 環境変数は大文字で定義されることが多い
+            if env_var_value is not None:
+                current_value = self.config_dic.get(
+                    key
+                )  # INIファイルやデフォルトから設定された現在の値
 
-            # フォールバック先の値として、まずは初期デフォルト値を型変換したものを用意
-            fallback_value_for_key = initial_default_typed_value
-            if self.type_dic and key in self.type_dic:
-                expected_type = self.type_dic[key]
-                if not isinstance(initial_default_typed_value, expected_type):
-                    # 初期デフォルトも念のため型変換（既に _apply_type_to_initial_defaults で行われているはずだが、安全のため）
-                    fallback_value_for_key = self._convert_value(
-                        str(initial_default_typed_value),
-                        expected_type,
-                        key,
-                        initial_default_typed_value,
-                    )
-
-            if value_from_file_str is not None:  # 設定ファイルにキーが存在する場合
                 if self.type_dic and key in self.type_dic:
                     expected_type = self.type_dic[key]
-                    self.config_dic[key] = self._convert_value(
-                        value_from_file_str, expected_type, key, fallback_value_for_key
+                    converted_env_value = self._convert_value(
+                        env_var_value,
+                        expected_type,
+                        key,
+                        current_value,  # 環境変数の変換失敗時は現在の値をフォールバックとする
                     )
+                    # 変換が成功し、かつ値が現在の値と異なる場合のみ更新
+                    if (
+                        isinstance(converted_env_value, expected_type)
+                        and converted_env_value != current_value
+                    ):
+                        self.config_dic[key] = converted_env_value
+                        self.logger.info(
+                            f"環境変数 '{key.upper()}' ({env_var_value}) が優先されました: "
+                            f"設定値 {key} が '{current_value}' から '{converted_env_value}' (型: {type(converted_env_value).__name__}) に変更されました。"
+                        )
+                    elif not isinstance(converted_env_value, expected_type):
+                        self.logger.warning(
+                            f"環境変数 '{key.upper()}' の値 '{env_var_value}' を期待される型 '{expected_type.__name__}' に変換できませんでした。INIファイルまたはデフォルト値が保持されます。"
+                        )
                 else:
-                    # 型定義がない場合はファイルからの文字列をそのまま使用
-                    self.config_dic[key] = value_from_file_str
-            else:  # 設定ファイルにキーが存在しない場合
-                self.logger.info(
-                    f"キー '{key}' が設定ファイルにありません。初期デフォルト値 (型適用後) '{fallback_value_for_key}' を使用します。"
-                )
-                self.config_dic[key] = fallback_value_for_key
-
-            if flag_first:
-                self.logger.info(
-                    f"読み込み後: {key}: {self.config_dic.get(key)} (型: {type(self.config_dic.get(key)).__name__})"
-                )
-            else:
-                self.logger.debug(
-                    f"読み込み後: {key}: {self.config_dic.get(key)} (型: {type(self.config_dic.get(key)).__name__})"
-                )
+                    # 型定義がない場合、環境変数を文字列としてそのまま優先
+                    if env_var_value != current_value:
+                        self.config_dic[key] = env_var_value
+                        self.logger.info(
+                            f"環境変数 '{key.upper()}' ({env_var_value}) が優先されました: "
+                            f"設定値 {key} が '{current_value}' から '{env_var_value}' (型: {type(env_var_value).__name__}) に変更されました。"
+                        )
 
         # default_dic_initial にはなく、ファイルにのみ存在する設定の扱い (オプション)
-        for key_in_file in read_section.keys():
-            if key_in_file not in self.default_dic_initial:
-                value_str = read_section[key_in_file]
-                # type_dic に定義があれば型変換を試みる、なければ文字列として追加
-                if self.type_dic and key_in_file in self.type_dic:
-                    expected_type = self.type_dic[key_in_file]
-                    # 未知のキーに対するフォールバックは難しいので、変換失敗時はNoneにするかエラー
-                    converted = self._convert_value(
-                        value_str, expected_type, key_in_file, None
-                    )  # フォールバックはNone
-                    if (
-                        converted is not None
-                    ):  # 変換成功時のみ（Noneが有効な値でない場合）
-                        self.config_dic[key_in_file] = converted
+        # この部分はINIファイルからの読み込み後に処理されるべきで、環境変数優先ロジックの後でも可
+        if "read_section" in locals():  # config_ini.read() が成功した場合のみ
+            for key_in_file in read_section.keys():
+                if key_in_file not in self.default_dic_initial:
+                    value_str = read_section[key_in_file]
+                    # type_dic に定義があれば型変換を試みる、なければ文字列として追加
+                    if self.type_dic and key_in_file in self.type_dic:
+                        expected_type = self.type_dic[key_in_file]
+                        # 未知のキーに対するフォールバックは難しいので、変換失敗時はNoneにするかエラー
+                        converted = self._convert_value(
+                            value_str, expected_type, key_in_file, None
+                        )  # フォールバックはNone
+                        if (
+                            converted is not None
+                        ):  # 変換成功時のみ（Noneが有効な値でない場合）
+                            self.config_dic[key_in_file] = converted
+                            if flag_first:
+                                self.logger.info(
+                                    f"ファイルから追加読込 (型変換有): {key_in_file}: {converted} (型: {type(converted).__name__})"
+                                )
+                            else:
+                                self.logger.debug(
+                                    f"ファイルから追加読込 (型変換有): {key_in_file}: {converted} (型: {type(converted).__name__})"
+                                )
+                        else:
+                            self.logger.warning(
+                                f"ファイルにのみ存在するキー '{key_in_file}' の値 '{value_str}' を型 '{expected_type.__name__}' に変換できませんでした。スキップします。"
+                            )
+                    else:
+                        self.config_dic[key_in_file] = value_str  # 型定義なしなら文字列
                         if flag_first:
                             self.logger.info(
-                                f"ファイルから追加読込 (型変換有): {key_in_file}: {converted} (型: {type(converted).__name__})"
+                                f"ファイルから追加読込 (型定義なし): {key_in_file}: {value_str} (型: {type(value_str).__name__})"
                             )
                         else:
                             self.logger.debug(
-                                f"ファイルから追加読込 (型変換有): {key_in_file}: {converted} (型: {type(converted).__name__})"
+                                f"ファイルから追加読込 (型定義なし): {key_in_file}: {value_str} (型: {type(value_str).__name__})"
                             )
-                    else:
-                        self.logger.warning(
-                            f"ファイルにのみ存在するキー '{key_in_file}' の値 '{value_str}' を型 '{expected_type.__name__}' に変換できませんでした。スキップします。"
-                        )
-                else:
-                    self.config_dic[key_in_file] = value_str  # 型定義なしなら文字列
-                    if flag_first:
-                        self.logger.info(
-                            f"ファイルから追加読込 (型定義なし): {key_in_file}: {value_str} (型: {type(value_str).__name__})"
-                        )
-                    else:
-                        self.logger.debug(
-                            f"ファイルから追加読込 (型定義なし): {key_in_file}: {value_str} (型: {type(value_str).__name__})"
-                        )
+
+        # 最終的な読み込み結果のログ出力
+        for key in self.default_dic_initial.keys():
+            if flag_first:
+                self.logger.info(
+                    f"最終読み込み結果: {key}: {self.config_dic.get(key)} (型: {type(self.config_dic.get(key)).__name__})"
+                )
+            else:
+                self.logger.debug(
+                    f"最終読み込み結果: {key}: {self.config_dic.get(key)} (型: {type(self.config_dic.get(key)).__name__})"
+                )
 
     def _convert_value(self, value_str: str, expected_type, key: str, fallback_value):
         """文字列を指定された型に変換する。失敗した場合は警告を出し、フォールバック値を返す。"""
@@ -379,6 +431,8 @@ if __name__ == "__main__":
         "value_missing_in_file": "default for missing",  # ファイルに意図的に含めない
         "value_with_bad_type_in_file": "original_good_bool",  # ファイル内で不正な型にするテスト用 (bool期待)
         "untyped_setting": 12345,  # 型定義なし (Pythonのint)
+        "ENV_TEST_VALUE": "default_env_val",  # 環境変数で上書きするテスト用
+        "ENV_BOOL_TEST": "initial_bool_val",  # 環境変数でbool型を上書きするテスト用
     }
     type_config = {
         "app_name": str,
@@ -391,8 +445,24 @@ if __name__ == "__main__":
         "value_missing_in_file": str,
         "value_with_bad_type_in_file": bool,
         # "untyped_setting" は type_config に含めない
+        "ENV_TEST_VALUE": str,
+        "ENV_BOOL_TEST": bool,
     }
     test_ini_file = "test_app_config.ini"
+
+    # --- 環境変数を設定 (テスト前にクリアする) ---
+    for key in default_config.keys():
+        env_key = key.upper()
+        if env_key in os.environ:
+            del os.environ[
+                env_key
+            ]  # 以前のテストで設定された可能性のある環境変数をクリア
+
+    os.environ["ENV_TEST_VALUE"] = "value_from_env"
+    os.environ["ENV_BOOL_TEST"] = "false"
+    os.environ["NON_EXISTENT_IN_CONFIG"] = (
+        "this_should_not_be_loaded"  # ConfigManagerのキーにない環境変数
+    )
 
     # --- 1. 初期化 (設定ファイルが存在しない場合) ---
     main_logger.info("\n--- Test 1: 初期化 (ファイルなし) ---")
@@ -413,15 +483,31 @@ if __name__ == "__main__":
     assert cfg_manager.get("port_number") == 8080
     assert cfg_manager.get("timeout_seconds") == 30.5
     assert cfg_manager.get("untyped_setting") == 12345  # 型定義なしなので元の型
+    assert (
+        cfg_manager.get("ENV_TEST_VALUE") == "value_from_env"
+    )  # 環境変数で上書きされる
+    assert (
+        cfg_manager.get("ENV_BOOL_TEST") is False
+    )  # 環境変数でbool型に変換されて上書きされる
+    assert (
+        cfg_manager.get("NON_EXISTENT_IN_CONFIG") is None
+    )  # default_dicになければ環境変数も読み込まれない
+
     main_logger.info(
         f"debug_mode: {cfg_manager.get('debug_mode')} (type: {type(cfg_manager.get('debug_mode')).__name__})"
     )
     main_logger.info(
         f"untyped_setting: {cfg_manager.get('untyped_setting')} (type: {type(cfg_manager.get('untyped_setting')).__name__})"
     )
+    main_logger.info(
+        f"ENV_TEST_VALUE: {cfg_manager.get('ENV_TEST_VALUE')} (type: {type(cfg_manager.get('ENV_TEST_VALUE')).__name__})"
+    )
+    main_logger.info(
+        f"ENV_BOOL_TEST: {cfg_manager.get('ENV_BOOL_TEST')} (type: {type(cfg_manager.get('ENV_BOOL_TEST')).__name__})"
+    )
 
-    # --- 2. 設定ファイルを手動で変更し、リロード ---
-    main_logger.info("\n--- Test 2: ファイル変更とリロード ---")
+    # --- 2. 設定ファイルを手動で変更し、リロード (環境変数はそのまま) ---
+    main_logger.info("\n--- Test 2: ファイル変更とリロード (環境変数あり) ---")
     with open(test_ini_file, "w", encoding="utf-8") as f:
         f.write("[DEFAULT]\n")
         f.write("app_name = TestApp Reloaded\n")
@@ -431,8 +517,20 @@ if __name__ == "__main__":
         # "value_missing_in_file" はここでも含めない
         f.write("value_with_bad_type_in_file = NotBool\n")  # 不正なブール値
         f.write("new_key_from_file = hello_from_file\n")  # default_dicにないキー
+        f.write("ENV_TEST_VALUE = value_from_ini\n")  # INIファイルで値を設定
+        f.write("ENV_BOOL_TEST = true\n")  # INIファイルで値を設定
+
+    # 環境変数を変更して、INIファイルの内容を上書きするかテスト
+    os.environ["ENV_TEST_VALUE"] = "new_value_from_env_after_ini"
+    os.environ["ENV_BOOL_TEST"] = "1"  # '1' -> True
 
     main_logger.info("リロード前のport_number: " + str(cfg_manager.get("port_number")))
+    main_logger.info(
+        "リロード前のENV_TEST_VALUE: " + str(cfg_manager.get("ENV_TEST_VALUE"))
+    )
+    main_logger.info(
+        "リロード前のENV_BOOL_TEST: " + str(cfg_manager.get("ENV_BOOL_TEST"))
+    )
     cfg_manager.reload()
 
     main_logger.info("リロード後の値:")
@@ -451,6 +549,11 @@ if __name__ == "__main__":
     assert (
         cfg_manager.get("new_key_from_file") == "hello_from_file"
     )  # default_dicになくても読み込まれる(型定義なし)
+    assert (
+        cfg_manager.get("ENV_TEST_VALUE") == "new_value_from_env_after_ini"
+    )  # INIよりも環境変数が優先される
+    assert cfg_manager.get("ENV_BOOL_TEST") is True  # INIよりも環境変数が優先される
+
     main_logger.info(
         f"port_number: {cfg_manager.get('port_number')} (type: {type(cfg_manager.get('port_number')).__name__})"
     )
@@ -459,6 +562,12 @@ if __name__ == "__main__":
     )
     main_logger.info(
         f"new_key_from_file: {cfg_manager.get('new_key_from_file')} (type: {type(cfg_manager.get('new_key_from_file')).__name__})"
+    )
+    main_logger.info(
+        f"ENV_TEST_VALUE: {cfg_manager.get('ENV_TEST_VALUE')} (type: {type(cfg_manager.get('ENV_TEST_VALUE')).__name__})"
+    )
+    main_logger.info(
+        f"ENV_BOOL_TEST: {cfg_manager.get('ENV_BOOL_TEST')} (type: {type(cfg_manager.get('ENV_BOOL_TEST')).__name__})"
     )
 
     # --- 3. set メソッドのテスト ---
@@ -489,6 +598,12 @@ if __name__ == "__main__":
     cfg_manager.set("new_typed_runtime_setting", "false")
     assert cfg_manager.get("new_typed_runtime_setting") is False
 
+    # setメソッドによる環境変数で上書きされた値の変更テスト
+    # set()はメモリ上のconfig_dicを直接操作するため、環境変数より優先される
+    cfg_manager.set("ENV_TEST_VALUE", "value_set_via_method")
+    assert cfg_manager.get("ENV_TEST_VALUE") == "value_set_via_method"
+    main_logger.info(f"ENV_TEST_VALUE (after set): {cfg_manager.get('ENV_TEST_VALUE')}")
+
     # --- 4. save メソッドのテスト ---
     main_logger.info("\n--- Test 4: save メソッド ---")
     cfg_manager.save()
@@ -507,17 +622,38 @@ if __name__ == "__main__":
     assert cfg_manager.get("port_number") != 0
 
     # --- 6. ファイル削除後のリロードテスト ---
-    main_logger.info("\n--- Test 6: ファイル削除とリロード ---")
+    main_logger.info("\n--- Test 6: ファイル削除とリロード (環境変数あり) ---")
     if os.path.exists(test_ini_file):
         os.remove(test_ini_file)
     cfg_manager.reload()  # ファイルがないので、初期デフォルト値で再生成される
+
+    # 環境変数が再度優先されることを確認
     assert cfg_manager.get("port_number") == 8080  # 初期デフォルトの '8080' -> 8080
     assert cfg_manager.get("debug_mode") is True  # 初期デフォルトの 'true' -> True
+    assert (
+        cfg_manager.get("ENV_TEST_VALUE") == "new_value_from_env_after_ini"
+    )  # 環境変数が優先される
+    assert cfg_manager.get("ENV_BOOL_TEST") is True  # 環境変数が優先される
+
     main_logger.info(
         f"ファイル削除・リロード後のport_number: {cfg_manager.get('port_number')}"
+    )
+    main_logger.info(
+        f"ファイル削除・リロード後のENV_TEST_VALUE: {cfg_manager.get('ENV_TEST_VALUE')}"
+    )
+    main_logger.info(
+        f"ファイル削除・リロード後のENV_BOOL_TEST: {cfg_manager.get('ENV_BOOL_TEST')}"
     )
 
     main_logger.info("\n======== ConfigManager テスト終了 ========")
     # テスト後クリーンアップ
     if os.path.exists(test_ini_file):
         os.remove(test_ini_file)
+
+    # 環境変数もクリーンアップ
+    for key in default_config.keys():
+        env_key = key.upper()
+        if env_key in os.environ:
+            del os.environ[env_key]
+    if "NON_EXISTENT_IN_CONFIG" in os.environ:
+        del os.environ["NON_EXISTENT_IN_CONFIG"]
