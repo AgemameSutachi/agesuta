@@ -131,7 +131,7 @@ class CustomLogger:
         self.log_encode = str(log_encode)
         self.maxBytes = int(maxBytes)
         self.backupCount = int(backupCount)
-        level_dic = {
+        self.level_dic = {
             "DEBUG": DEBUG,
             "INFO": INFO,
             "WARNING": WARNING,
@@ -139,7 +139,7 @@ class CustomLogger:
             "CRITICAL": CRITICAL,
             "NOTSET": NOTSET,
         }
-        self.showlevel = level_dic.get(showlevel.upper(), INFO)
+        self.showlevel = self.level_dic.get(showlevel.upper(), INFO)
         if flag_unnecessary_loggers_to_error:
             logger_names = [
                 "werkzeug",
@@ -249,6 +249,31 @@ class CustomLogger:
             # もし何も見つからなければ空文字
             return ""
 
+    def set_logdir(
+        self,
+        dir_path: str = None,
+        flag_datelog: bool = None,
+        maxBytes: int = None,
+        backupCount: int = None,
+        encoding: str = None,
+        showlevel: str = None,
+    ):
+        """ログフォルダ等をあとから変更する"""
+        if dir_path is not None:
+            self.dir_path = str(dir_path)
+        if flag_datelog is not None:
+            self.flag_datelog = bool(flag_datelog)
+        if maxBytes is not None:
+            self.maxBytes = int(maxBytes)
+        if backupCount is not None:
+            self.backupCount = int(backupCount)
+        if encoding is not None:
+            self.encoding = str(encoding)
+        if showlevel is not None:
+            self.showlevel = self.level_dic.get(showlevel.upper(), INFO)
+        self.log_main()
+        return 0
+
     def log_main(self):
         handlers = []
         importname = self.get_script_display_name()
@@ -285,7 +310,7 @@ class CustomLogger:
             handlers.append(file_handler)
 
             # ルートロガーの設定
-            logging.basicConfig(level=NOTSET, handlers=handlers)
+            logging.basicConfig(level=NOTSET, handlers=handlers, force=True)
         else:
             loggger_dic = {
                 f"{importname}0_debug": DEBUG,
@@ -314,7 +339,7 @@ class CustomLogger:
                 handlers.append(logger_temp)
 
             # ルートロガーの設定
-            logging.basicConfig(level=NOTSET, handlers=handlers)
+            logging.basicConfig(level=NOTSET, handlers=handlers, force=True)
 
 
 def log_decorator(logger):

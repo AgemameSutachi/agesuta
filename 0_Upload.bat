@@ -51,7 +51,7 @@ if exist "%VENV_PATH%" (
         if "!VERSION!"=="" (
             echo Error: Could not read version from .\agesuta\version.txt or version is empty.
             call deactivate
-            exit /b 1
+            goto :end
         )
 
         echo Version read: !VERSION!
@@ -76,7 +76,7 @@ if exist "%VENV_PATH%" (
         if errorlevel 1 (
             echo Error uploading to TestPyPI. Aborting.
             call deactivate
-            exit /b 1
+            goto :end
         )
 
         rem PyPIへのアップロード
@@ -85,20 +85,21 @@ if exist "%VENV_PATH%" (
         if errorlevel 1 (
             echo Error uploading to PyPI. Aborting.
             call deactivate
-            exit /b 1
+            goto :end
         )
 
         rem Git操作
         echo Adding files to Git...
         git add .
 
+        SET /P INPUTSTR="コミットメッセージを入力"
         rem コミットメッセージにバージョン情報を使用
-        echo Committing with message: !VERSION!
-        git commit -m "!VERSION!"
+        echo Committing with message: !VERSION! !INPUTSTR!
+        git commit -m "!VERSION! !INPUTSTR!"
         if errorlevel 1 (
             echo Error during git commit. Aborting.
             call deactivate
-            exit /b 1
+            goto :end
         )
 
         echo Pushing to origin main...
@@ -106,7 +107,7 @@ if exist "%VENV_PATH%" (
         if errorlevel 1 (
             echo Error during git push. Aborting.
             call deactivate
-            exit /b 1
+            goto :end
         )
 
         rem GitHub CLIを使用してリリースを作成し、タグ付け
@@ -117,7 +118,7 @@ if exist "%VENV_PATH%" (
             echo Error creating GitHub release. Please check if gh CLI is installed and authenticated.
             echo If the tag already exists, this command will fail.
             call deactivate
-            exit /b 1
+            goto :end
         )
 
         echo Release !VERSION! created successfully.
@@ -136,6 +137,7 @@ if exist "%VENV_PATH%" (
     echo venvを作成するには、手動で `python -m venv "%VENV_PATH%"` を実行してください。
 )
 
+:end
 pause
 endlocal
 exit /b
