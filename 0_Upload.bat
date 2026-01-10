@@ -92,7 +92,7 @@ if exist "%VENV_PATH%" (
         echo Adding files to Git...
         git add .
 
-        SET /P INPUTSTR="コミットメッセージを入力"
+        SET /P INPUTSTR="コミットメッセージを入力:"
         rem コミットメッセージにバージョン情報を使用
         echo Committing with message: !VERSION! !INPUTSTR!
         git commit -m "!VERSION! !INPUTSTR!"

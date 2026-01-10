@@ -1,5 +1,6 @@
 import os
 import logging
+import time
 from datetime import datetime
 from logging import Formatter
 from logging import DEBUG, INFO, WARNING, ERROR, CRITICAL, NOTSET
@@ -11,6 +12,12 @@ import re
 import sys
 import ssl
 import certifi
+
+# TZ設定
+if "TZ" not in os.environ:
+    os.environ["TZ"] = "Asia/Tokyo"
+    if hasattr(time, "tzset"):
+        time.tzset()
 
 ssl_context = ssl.create_default_context(cafile=certifi.where())
 
