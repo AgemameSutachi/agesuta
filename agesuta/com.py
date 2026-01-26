@@ -12,12 +12,10 @@ import re
 import sys
 import ssl
 import certifi
+import zoneinfo
 
-# TZ設定
-if "TZ" not in os.environ:
-    os.environ["TZ"] = "Asia/Tokyo"
-    if hasattr(time, "tzset"):
-        time.tzset()
+# JSTタイムゾーンオブジェクトの定義
+JST = zoneinfo.ZoneInfo("Asia/Tokyo")
 
 ssl_context = ssl.create_default_context(cafile=certifi.where())
 
@@ -44,7 +42,7 @@ class CustomLevelRotatingFileHandler(RotatingFileHandler):
             self.stream = None
 
         base, ext = os.path.splitext(self.baseFilename)
-        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        timestamp = datetime.now(JST).strftime("%Y-%m-%d_%H-%M-%S")
 
         log_dir = os.path.dirname(self.baseFilename)
         base_name = os.path.basename(base)
@@ -297,7 +295,7 @@ class CustomLogger:
 
         # ファイルハンドラの設定
         if self.flag_datelog:
-            logfile_path = f"{self.dir_path}/{importname}{datetime.now():%Y-%m-%d}.log"
+            logfile_path = f"{self.dir_path}/{importname}{datetime.now(JST):%Y-%m-%d}.log"
             if os.path.exists(logfile_path):
                 ret = self.change_encode(logfile_path, self.log_encode)
             file_handler = CustomDateRotatingFileHandler(
