@@ -59,7 +59,7 @@ class ConfigManager:
             else:
                 # type_dic に定義がない場合は、そのままの値を使用
                 self.config_dic[key] = default_raw_value
-            self.logger.debug(
+            self.logger.info(
                 f"初期デフォルト適用: {key}: {self.config_dic.get(key)} (型: {type(self.config_dic.get(key)).__name__})"
             )
 
@@ -105,14 +105,27 @@ class ConfigManager:
                     ):  # 設定ファイルにキーが存在する場合
                         if self.type_dic and key in self.type_dic:
                             expected_type = self.type_dic[key]
-                            self.config_dic[key] = self._convert_value(
+                            converted_value = self._convert_value(
                                 value_from_file_str,
                                 expected_type,
                                 key,
                                 fallback_value_for_key,
                             )
+                            # 変換された値がフォールバック値と異なる場合、または型が変わった場合にログ
+                            if converted_value != fallback_value_for_key or type(converted_value) != type(fallback_value_for_key):
+                                self.logger.info(
+                                    f"INIファイル読込変更 key=[{key}]: {repr(fallback_value_for_key)} (型: {type(fallback_value_for_key).__name__}) "
+                                    f"→ {repr(converted_value)} (型: {type(converted_value).__name__})"
+                                )
+                            self.config_dic[key] = converted_value
                         else:
                             # 型定義がない場合はファイルからの文字列をそのまま使用
+                            # 読み込んだ値がフォールバック値と異なる場合、または型が変わった場合にログ
+                            if value_from_file_str != fallback_value_for_key or type(value_from_file_str) != type(fallback_value_for_key):
+                                self.logger.info(
+                                    f"INIファイル読込変更 key=[{key}]: {repr(fallback_value_for_key)} (型: {type(fallback_value_for_key).__name__}) "
+                                    f"→ {repr(value_from_file_str)} (型: {type(value_from_file_str).__name__})"
+                                )
                             self.config_dic[key] = value_from_file_str
                     else:  # 設定ファイルにキーが存在しない場合
                         self.logger.info(
@@ -188,10 +201,10 @@ class ConfigManager:
                                 self.logger.info(
                                     f"ファイルから追加読込 (型変換有): {key_in_file}: {converted} (型: {type(converted).__name__})"
                                 )
-                            else:
-                                self.logger.debug(
-                                    f"ファイルから追加読込 (型変換有): {key_in_file}: {converted} (型: {type(converted).__name__})"
-                                )
+                            # else:
+                            #     self.logger.debug(
+                            #         f"ファイルから追加読込 (型変換有): {key_in_file}: {converted} (型: {type(converted).__name__})"
+                            #     )
                         else:
                             self.logger.warning(
                                 f"ファイルにのみ存在するキー '{key_in_file}' の値 '{value_str}' を型 '{expected_type.__name__}' に変換できませんでした。スキップします。"
@@ -202,10 +215,10 @@ class ConfigManager:
                             self.logger.info(
                                 f"ファイルから追加読込 (型定義なし): {key_in_file}: {value_str} (型: {type(value_str).__name__})"
                             )
-                        else:
-                            self.logger.debug(
-                                f"ファイルから追加読込 (型定義なし): {key_in_file}: {value_str} (型: {type(value_str).__name__})"
-                            )
+                        # else:
+                        #     self.logger.debug(
+                        #         f"ファイルから追加読込 (型定義なし): {key_in_file}: {value_str} (型: {type(value_str).__name__})"
+                        #     )
 
         # 最終的な読み込み結果のログ出力
         for key in self.default_dic_initial.keys():
@@ -213,10 +226,10 @@ class ConfigManager:
                 self.logger.info(
                     f"最終読み込み結果: {key}: {self.config_dic.get(key)} (型: {type(self.config_dic.get(key)).__name__})"
                 )
-            else:
-                self.logger.debug(
-                    f"最終読み込み結果: {key}: {self.config_dic.get(key)} (型: {type(self.config_dic.get(key)).__name__})"
-                )
+            # else:
+            #     self.logger.debug(
+            #         f"最終読み込み結果: {key}: {self.config_dic.get(key)} (型: {type(self.config_dic.get(key)).__name__})"
+            #     )
 
     def _convert_value(self, value_str: str, expected_type, key: str, fallback_value):
         """文字列を指定された型に変換する。失敗した場合は警告を出し、フォールバック値を返す。"""
