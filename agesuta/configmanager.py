@@ -103,27 +103,38 @@ class ConfigManager:
                     if (
                         value_from_file_str is not None
                     ):  # 設定ファイルにキーが存在する場合
+                        # 比較対象の「古い値」を決定する。初回ロード時は初期デフォルト値、リロード時はメモリ上の現在値。
+                        old_value_for_comparison = (
+                            fallback_value_for_key
+                            if flag_first
+                            else self.config_dic.get(key)
+                        )
+
                         if self.type_dic and key in self.type_dic:
                             expected_type = self.type_dic[key]
                             converted_value = self._convert_value(
                                 value_from_file_str,
                                 expected_type,
                                 key,
-                                fallback_value_for_key,
+                                fallback_value_for_key,  # 変換失敗時のフォールバックは初期値のまま
                             )
-                            # 変換された値がフォールバック値と異なる場合、または型が変わった場合にログ
-                            if converted_value != fallback_value_for_key or type(converted_value) != type(fallback_value_for_key):
+                            # 変換後の新しい値と「古い値」を比較
+                            if converted_value != old_value_for_comparison or type(
+                                converted_value
+                            ) != type(old_value_for_comparison):
                                 self.logger.info(
-                                    f"INIファイル読込変更 key=[{key}]: {repr(fallback_value_for_key)} (型: {type(fallback_value_for_key).__name__}) "
+                                    f"INIファイル読込変更 key=[{key}]: {repr(old_value_for_comparison)} (型: {type(old_value_for_comparison).__name__}) "
                                     f"→ {repr(converted_value)} (型: {type(converted_value).__name__})"
                                 )
                             self.config_dic[key] = converted_value
                         else:
                             # 型定義がない場合はファイルからの文字列をそのまま使用
-                            # 読み込んだ値がフォールバック値と異なる場合、または型が変わった場合にログ
-                            if value_from_file_str != fallback_value_for_key or type(value_from_file_str) != type(fallback_value_for_key):
+                            # 新しい値(文字列)と「古い値」を比較
+                            if value_from_file_str != old_value_for_comparison or type(
+                                value_from_file_str
+                            ) != type(old_value_for_comparison):
                                 self.logger.info(
-                                    f"INIファイル読込変更 key=[{key}]: {repr(fallback_value_for_key)} (型: {type(fallback_value_for_key).__name__}) "
+                                    f"INIファイル読込変更 key=[{key}]: {repr(old_value_for_comparison)} (型: {type(old_value_for_comparison).__name__}) "
                                     f"→ {repr(value_from_file_str)} (型: {type(value_from_file_str).__name__})"
                                 )
                             self.config_dic[key] = value_from_file_str
