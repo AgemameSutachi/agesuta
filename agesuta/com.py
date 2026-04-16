@@ -13,6 +13,7 @@ import sys
 import ssl
 import certifi
 import zoneinfo
+import tzdata
 
 # JSTタイムゾーンオブジェクトの定義
 JST = zoneinfo.ZoneInfo("Asia/Tokyo")
@@ -295,7 +296,9 @@ class CustomLogger:
 
         # ファイルハンドラの設定
         if self.flag_datelog:
-            logfile_path = f"{self.dir_path}/{importname}{datetime.now(JST):%Y-%m-%d}.log"
+            logfile_path = (
+                f"{self.dir_path}/{importname}{datetime.now(JST):%Y-%m-%d}.log"
+            )
             if os.path.exists(logfile_path):
                 ret = self.change_encode(logfile_path, self.log_encode)
             file_handler = CustomDateRotatingFileHandler(
