@@ -32,11 +32,15 @@ setup(
         "markdown-it-py>=3.0.0",
         "mdurl>=0.1.2",
         "Pygments>=2.19.1",
-        "requests>=2.32.3",
         "rich>=14.0.0",
-        "slack_sdk>=3.35.0",
         "urllib3>=2.4.0",
     ],
+    extras_require={  # 特定機能でのみ使用するオプショナルな依存関係
+        "slack": [
+            "slack_sdk>=3.35.0",
+            "requests>=2.32.3",
+        ]
+    },
     description="A custom logging utility and other utilities with Rich console output, file handling, Slack notification, etc.",  # パッケージの簡単な説明 (更新)
     long_description=read("README.md"),  # README.mdを詳細な説明として使用
     long_description_content_type="text/markdown",  # long_descriptionの形式を指定

@@ -5,9 +5,23 @@ import certifi
 from .configmanager import ConfigManager
 import inspect
 from traceback import TracebackException as TE
-from slack_sdk import WebClient
-from slack_sdk.errors import SlackApiError
-import requests
+
+try:
+    from slack_sdk import WebClient
+    from slack_sdk.errors import SlackApiError
+    HAS_SLACK_SDK = True
+except ImportError:
+    WebClient = None
+    SlackApiError = None
+    HAS_SLACK_SDK = False
+
+try:
+    import requests
+    HAS_REQUESTS = True
+except ImportError:
+    requests = None
+    HAS_REQUESTS = False
+
 from io import BytesIO
 import subprocess
 import os
@@ -34,6 +48,12 @@ class SlackPoster:
             slack_api_config_path (str): Slack API 設定ファイルへのパス。
             slack_exe_config_path (str): Slack 実行ファイル設定ファイルへのパス。
         """
+        if not HAS_SLACK_SDK:
+            raise ImportError(
+                "slack_sdk がインストールされていないため、SlackPoster を初期化できません。"
+                "Slack連携機能を使用するには 'pip install agesuta[slack]' を実行して "
+                "必要な依存パッケージをインストールしてください。"
+            )
         self.logger = logger_instance
 
         # Slack API 設定の読み込み
@@ -423,6 +443,11 @@ class SlackPoster:
         Slack APIを使用してURLから画像を投稿します。
         API失敗時は外部実行ファイルにフォールバックします。
         """
+        if not HAS_REQUESTS:
+            raise ImportError(
+                "requests がインストールされていないため、URLからの画像投稿機能は使用できません。"
+                "この機能を使用するには 'pip install agesuta[slack]' を実行してください。"
+            )
         current_channel = channel if channel is not None else self.channel
         current_token = token if token is not None else self.token
         self.logger.info(
