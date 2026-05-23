@@ -203,3 +203,7 @@ $RECYCLE.BIN/
 /config
 *.url
 .pypirc
+
+# Antigravity
+.antigravitycli/
+
