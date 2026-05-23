@@ -48,8 +48,9 @@ class CustomLevelRotatingFileHandler(RotatingFileHandler):
         log_dir = os.path.dirname(self.baseFilename)
         base_name = os.path.basename(base)
 
+        # base_name にドットが含まれていても安全なように、正規表現でグループマッチを使う
         pattern = re.compile(
-            rf"^{re.escape(base_name)}\.(\d+)\.\d{{4}}-\d{{2}}-\d{{2}}_\d{{2}}-\d{{2}}-\d{{2}}{re.escape(ext)}$"
+            rf"^{re.escape(base_name)}\.(\d+)\.(\d{{4}}-\d{{2}}-\d{{2}}_\d{{2}}-\d{{2}}-\d{{2}}){re.escape(ext)}$"
         )
         files_with_index = []
 
@@ -57,42 +58,96 @@ class CustomLevelRotatingFileHandler(RotatingFileHandler):
             match = pattern.match(fname)
             if match:
                 idx = int(match.group(1))
-                files_with_index.append((idx, fname))
+                ts = match.group(2)
+                files_with_index.append((idx, ts, fname))
 
         # 番号が大きい順にずらす
-        for idx, fname in sorted(files_with_index, reverse=True):
+        for idx, ts, fname in sorted(files_with_index, key=lambda x: x[0], reverse=True):
             full_path = os.path.join(log_dir, fname)
             if idx >= self.backupCount:
-                os.remove(full_path)
+                try:
+                    os.remove(full_path)
+                except Exception:
+                    pass
             else:
-                new_name = f"{base_name}.{idx + 1}.{fname.split('.', 2)[2]}"
-                os.rename(os.path.join(log_dir, fname), os.path.join(log_dir, new_name))
+                new_name = f"{base_name}.{idx + 1}.{ts}{ext}"
+                try:
+                    os.rename(full_path, os.path.join(log_dir, new_name))
+                except Exception:
+                    pass
 
         # 現在のログファイルを .1.<timestamp>.log にローテート
         dfn = os.path.join(log_dir, f"{base_name}.1.{timestamp}{ext}")
         if os.path.exists(dfn):
-            os.remove(dfn)
-        self.rotate(self.baseFilename, dfn)
+            try:
+                os.remove(dfn)
+            except Exception:
+                pass
+        try:
+            self.rotate(self.baseFilename, dfn)
+        except Exception:
+            pass
 
         if not self.delay:
             self.stream = self._open()
 
 
 class CustomDateRotatingFileHandler(RotatingFileHandler):
+    def __init__(
+        self,
+        filename,
+        mode="a",
+        maxBytes=0,
+        backupCount=0,
+        encoding=None,
+        delay=False,
+    ):
+        super().__init__(filename, mode, maxBytes, backupCount, encoding, delay)
+        # ファイル名から日付パターン (YYYY-MM-DD) を探す
+        self.date_pattern = re.compile(r"\d{4}-\d{2}-\d{2}")
+        match = self.date_pattern.search(self.baseFilename)
+        if match:
+            self.current_date_str = match.group(0)
+        else:
+            self.current_date_str = datetime.now(JST).strftime("%Y-%m-%d")
+
+    def shouldRollover(self, record):
+        # 日付が変わったかチェック
+        now_date_str = datetime.now(JST).strftime("%Y-%m-%d")
+        if now_date_str != self.current_date_str:
+            return True
+        return super().shouldRollover(record)
+
     def doRollover(self):
         """
-        ファイル名を basename_<timestamp>.<番号>.log にしてローテート。
-        ローテートのたびに既存ファイルの番号を+1し、最新を .1.<timestamp>.log にする。
+        日付が変わった場合は新しい日付のファイルを作成する。
+        同一日付内でサイズ超過した場合は、basename_<timestamp>.<番号>.log にしてローテート。
+        ローテートのたびに既存ファイルの番号を+1し、最新を .1.log にする。
         """
         if self.stream:
             self.stream.close()
             self.stream = None
 
+        now_date_str = datetime.now(JST).strftime("%Y-%m-%d")
+
+        # 日付が変わったことによるロールオーバーか、サイズ超過によるロールオーバーかを判定
+        if now_date_str != self.current_date_str:
+            # 日付が変わった場合：baseFilename 自体を新しい日付に更新する
+            old_base = self.baseFilename
+            new_base = self.date_pattern.sub(now_date_str, old_base)
+            self.baseFilename = new_base
+            self.current_date_str = now_date_str
+            # 新しいファイルを開く
+            if not self.delay:
+                self.stream = self._open()
+            return
+
+        # 同一日内でのサイズ超過による通常のロールオーバー
         base, ext = os.path.splitext(self.baseFilename)
         log_dir = os.path.dirname(self.baseFilename)
         base_name = os.path.basename(base)
 
-        # debug.N.log にマッチするファイルを探す
+        # base_name にドットが含まれていても安全なように、正規表現でグループマッチを使う
         pattern = re.compile(rf"^{re.escape(base_name)}\.(\d+){re.escape(ext)}$")
         files_with_index = []
 
@@ -103,22 +158,35 @@ class CustomDateRotatingFileHandler(RotatingFileHandler):
                 files_with_index.append((idx, fname))
 
         # 番号が大きい順にずらす
-        for idx, fname in sorted(files_with_index, reverse=True):
+        for idx, fname in sorted(files_with_index, key=lambda x: x[0], reverse=True):
             full_path = os.path.join(log_dir, fname)
             if idx >= self.backupCount:
-                os.remove(full_path)
+                try:
+                    os.remove(full_path)
+                except Exception:
+                    pass
             else:
                 new_name = f"{base_name}.{idx + 1}{ext}"
-                os.rename(os.path.join(log_dir, fname), os.path.join(log_dir, new_name))
+                try:
+                    os.rename(full_path, os.path.join(log_dir, new_name))
+                except Exception:
+                    pass
 
         # 現在のログファイルを .1.log にローテート
         dfn = os.path.join(log_dir, f"{base_name}.1{ext}")
         if os.path.exists(dfn):
-            os.remove(dfn)
-        self.rotate(self.baseFilename, dfn)
+            try:
+                os.remove(dfn)
+            except Exception:
+                pass
+        try:
+            self.rotate(self.baseFilename, dfn)
+        except Exception:
+            pass
 
         if not self.delay:
             self.stream = self._open()
+
 
 
 class CustomLogger:
@@ -353,20 +421,33 @@ class CustomLogger:
 def log_decorator(logger):
     def _log_decorator(func):
         def wrapper(*args, **kwargs):
-            local_args = locals()
             try:
-                logger.debug(f"start: {func.__name__}  args: {str(local_args)}")
+                sig = inspect.signature(func)
+                bound_args = sig.bind_partial(*args, **kwargs)
+                bound_args.apply_defaults()
+                log_args = {
+                    k: v for k, v in bound_args.arguments.items()
+                    if k not in ("self", "cls")
+                }
+            except Exception:
+                # signatureの解析に失敗した場合は locals から self / cls を除いたフォールバック
+                log_args = {k: v for k, v in kwargs.items()}
+                if args:
+                    log_args["args"] = args[1:] if len(args) > 1 else args
+
+            try:
+                logger.debug(f"start: {func.__name__}  args: {log_args}")
                 return_val = func(*args, **kwargs)
-                logger.debug(f"  end: {func.__name__}  ret: {str(return_val)}")
-                # logger.debug(f"  end: {func.__name__}")
+                logger.debug(f"  end: {func.__name__}  ret: {return_val}")
                 return return_val
             except Exception as e:
-                logger.error(f"error: {func.__name__}")
+                logger.error(f"error: {func.__name__} - {type(e).__name__}: {e}")
                 raise e
 
         return wrapper
 
     return _log_decorator
+
 
 
 if __name__ == "__main__":

@@ -23,7 +23,7 @@ from agesuta import CustomLogger, log_decorator
 # ロガーの初期設定を行うインスタンスを作成します
 # これにより、ルートロガーにハンドラが設定されます
 Cl_logger = CustomLogger(
-    flag_datelog=False, # 日付ベースの単一ログファイルにする場合は True に設定
+    flag_datelog=False, # 日付ベース of 単一ログファイルにする場合は True に設定
     dir_path="./Log",
     log_encode="utf-8",
     showlevel="INFO", # コンソール出力の最小レベル
@@ -83,3 +83,18 @@ logger.critical("これはクリティカルメッセージです。")
 ## ライセンス
 
 このプロジェクトはMITライセンスの下で提供されます - 詳細については LICENSE ファイルを参照してください。
+
+## Antigravityによる改善プロジェクト (2026-05-23)
+
+ライブラリの全体的なスキャンを行い、堅牢性と使いやすさを向上させるための改善タスクを定義し、実行しました。
+
+### 改善タスク一覧
+- [x] 開発仮想環境（venv）の再作成（Python 3.13 への追従）
+- [x] `com.py`: `CustomLevelRotatingFileHandler` のファイル名パースバグ修正（ファイル名に `.` が含まれる場合の崩壊防止）
+- [x] `com.py`: `CustomDateRotatingFileHandler` の日付またぎ時のローテーション不整合修正（日付変更時に自動で新ファイルを作成）
+- [x] `com.py`: ファイル操作時の Windows `PermissionError` に対する例外ハンドリングの強化
+- [x] `com.py`: クラス/インスタンスメソッドにも対応した高度な `log_decorator` の再実装
+- [x] `slackapi.py`: `get_channelid` でチャンネルIDが直接渡された際の即時返却対応（API呼び出しの削減）
+- [x] `slackapi.py`: `get_channelid` のページネーション（100件超のチャンネル対応）
+- [x] `slackapi.py`: 改善された `log_decorator` の適用とロギングの最適化
+- [x] 全体の `black` フォーマット適用とテストコードによる動作確認

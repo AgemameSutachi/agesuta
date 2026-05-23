@@ -99,18 +99,31 @@ class SlackPoster:
         if not self.client:
             self.logger.error("Slack client is not initialized.")
             return 1, ""
+
+        # name がすでにチャンネルID形式 (C/G/Dで始まる9桁以上の英数字) の場合はそのまま返す
+        if name and (name.startswith("C") or name.startswith("G") or name.startswith("D")) and len(name) >= 9:
+            return 0, name
+
         try:
-            channels = self.client.conversations_list()
-            if channels["ok"]:
-                for i in channels["channels"]:
-                    if i["name"] == name:
-                        return 0, i["id"]
+            cursor = None
+            while True:
+                channels = self.client.conversations_list(cursor=cursor, limit=1000)
+                if channels["ok"]:
+                    for i in channels["channels"]:
+                        if i["name"] == name:
+                            return 0, i["id"]
+                    cursor = channels.get("response_metadata", {}).get("next_cursor")
+                    if not cursor:
+                        break
+                else:
+                    break
             self.logger.warning(f"Channel name not found: {name}")
             return 1, ""
         except Exception as e:
             self.logger.exception(f"{inspect.currentframe().f_code.co_name}で例外発生")
             return 1, ""
 
+    @log_decorator(logging.getLogger(__name__))
     def textpost_exe(self, text, channel=None, token=None):
         """
         外部実行ファイルを使用してテキストを投稿します。
@@ -155,7 +168,7 @@ class SlackPoster:
             self.logger.exception("Exception occurred during textpost_exe execution")
             return ""
 
-    # @log_decorator # デコレータはクラスメソッドやインスタンスメソッドに適用する場合、調整が必要です
+    @log_decorator(logging.getLogger(__name__))
     def imagepost_exe(self, image_path, channel=None, token=None):
         """
         外部実行ファイルを使用して画像を投稿します。
@@ -202,7 +215,7 @@ class SlackPoster:
             self.logger.exception("Exception occurred during imagepost_exe execution")
             return ""
 
-    # @log_decorator # デコレータはクラスメソッドやインスタンスメソッドに適用する場合、調整が必要です
+    @log_decorator(logging.getLogger(__name__))
     def imagepost_from_url_exe(self, image_url, channel=None, token=None):
         """
         外部実行ファイルを使用してURLから画像を投稿します。
@@ -251,8 +264,7 @@ class SlackPoster:
             )
             return ""
 
-    # デコレータ使用するとうまく動かない -> デコレータは削除または調整が必要です
-    # @log_decorator
+    @log_decorator(logging.getLogger(__name__))
     def textpost(self, text, channel=None, token=None):
         """
         Slack APIを使用してテキストメッセージを投稿します。
@@ -315,8 +327,7 @@ class SlackPoster:
                 self.logger.exception("textpost_exeで例外発生 (Fallback failed)")
                 return ""
 
-    # デコレータ使用するとうまく動かない -> デコレータは削除または調整が必要です
-    # @log_decorator
+    @log_decorator(logging.getLogger(__name__))
     def imagepost(self, image_path, caption="", channel=None, token=None):
         """
         Slack APIを使用して画像を投稿します。
@@ -406,8 +417,7 @@ class SlackPoster:
                 self.logger.exception("Error posting image for exe (Fallback failed)")
                 return ""
 
-    # デコレータ使用するとうまく動かない -> デコレータは削除または調整が必要です
-    # @log_decorator
+    @log_decorator(logging.getLogger(__name__))
     def imagepost_from_url(self, image_url, caption="", channel=None, token=None):
         """
         Slack APIを使用してURLから画像を投稿します。
