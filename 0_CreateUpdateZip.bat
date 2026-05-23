@@ -1,4 +1,5 @@
 ﻿@echo off
+chcp 65001 > nul
 setlocal enabledelayedexpansion
 cd /d "%~dp0"
 
@@ -13,7 +14,7 @@ if exist "%ZIP_NAME%" del "%ZIP_NAME%"
 
 echo Checking project structure...
 
-rem PowerShell を使って、EXEビルド (dist) かソースコードプロジェクトかを自動判定して ZIP化します。
+rem PowerShell  using 、EXEbuild (dist)  or source code project automatically, and  ZIPconvert it。
 powershell -NoProfile -ExecutionPolicy Bypass -Command "^
     $exclude = @('.git', '.antigravitycli', '.vscode', '.idea', 'venv', '.venv', 'env', 'node_modules', '__pycache__', 'storage', 'system_update.zip', '0_CreateUpdateZip.bat', '.env');^
     if (Test-Path 'dist') {^

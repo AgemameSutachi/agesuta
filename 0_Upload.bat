@@ -3,17 +3,17 @@ chcp 65001 > nul
 setlocal enabledelayedexpansion
 
 rem 開発用venvのアクティベートおよびPyPIアップロード自動化バッチ
-echo pipにアップロードを開始します
+echo pipにアップロードをStartします
 cd /d %~dp0
 
-rem 一時ディレクトリとvenvディレクトリの存在確認と作成
+rem Checking and creating temporary and venv directories
 if not exist "%UserProfile%\temp\" (
     mkdir "%UserProfile%\temp\"
-    echo ディレクトリ作成: "%UserProfile%\temp\"
+    echo Create directory: "%UserProfile%\temp\"
 )
 if not exist "%UserProfile%\temp\venv\" (
     mkdir "%UserProfile%\temp\venv\"
-    echo ディレクトリ作成: "%UserProfile%\temp\venv\"
+    echo Create directory: "%UserProfile%\temp\venv\"
 )
 
 rem 現在のディレクトリ名を取得
@@ -31,7 +31,7 @@ if exist "%VENV_PATH%" (
     if exist "%VENV_PATH%\Scripts\Activate.bat" (
         echo 仮想環境をアクティベート中...
         call "%VENV_PATH%\Scripts\Activate.bat"
-        echo アクティベート完了
+        echo Activation completed
         cd /d %~dp0
 
         rem version.txtからバージョン読み込み
@@ -54,7 +54,7 @@ if exist "%VENV_PATH%" (
 
         echo バージョン: !VERSION!
 
-        rem ビルド関連コマンドの実行
+        rem build関連コマンドのExecute
         cd /d %~dp0
         echo Cleaning dist directory...
         if exist dist (
@@ -102,7 +102,7 @@ if exist "%VENV_PATH%" (
                 goto :end
             )
         ) else (
-            echo Working tree はクリーンです。新規のGitコミット作成をスキップします。
+            echo Working tree はクリーンです。新規のGitコミット作成をSkipします。
         )
 
         echo Pushing to origin main...
@@ -127,7 +127,7 @@ if exist "%VENV_PATH%" (
 
         rem venvをディアクティベート
         call deactivate
-        echo ディアクティベート完了
+        echo ディActivation completed
 
     ) else (
         echo エラー: アクティベートスクリプトが見つかりません: "%VENV_PATH%\Scripts\Activate.bat"
@@ -136,7 +136,7 @@ if exist "%VENV_PATH%" (
 
 ) else (
     echo エラー: 仮想環境が見つかりません: "%VENV_PATH%"
-    echo 仮想環境を作成するには、親フォルダで `python -m venv "%VENV_PATH%"` を実行してください。
+    echo 仮想環境を作成するには、親フォルダで `python -m venv "%VENV_PATH%"` をExecuteしてください。
 )
 
 :end

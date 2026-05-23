@@ -1,4 +1,5 @@
 ﻿@echo off
+chcp 65001 > nul
 @REM �J���p��venv�쐬����X�N���v�g
 echo ����쐬���܂�
 cd /d %~dp0
