@@ -1,4 +1,5 @@
 @echo off
+chcp 65001 > nul
 setlocal enabledelayedexpansion
 
 rem 開発用venvのアクティベートおよびPyPIアップロード自動化バッチ
