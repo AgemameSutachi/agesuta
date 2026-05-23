@@ -2,7 +2,7 @@
 chcp 65001 > nul
 setlocal enabledelayedexpansion
 
-rem 開発用venvのアクティベートおよびPyPIアップロード自動化バッチ
+rem For developmentvenv activation and PyPIupload automation batch
 echo pipにアップロードをStartします
 cd /d %~dp0
 
@@ -16,32 +16,32 @@ if not exist "%UserProfile%\temp\venv\" (
     echo Create directory: "%UserProfile%\temp\venv\"
 )
 
-rem 現在のディレクトリ名を取得
+rem Get current directory name
 set DIRECTORY_PATH=%~dp0
 for %%i in ("%DIRECTORY_PATH:~0,-1%") do set THIS_DIRECTORY=%%~ni
 
-rem venvのパス構築
+rem venvpath construction
 set "VENV_PATH=%UserProfile%\temp\venv\%THIS_DIRECTORY%"
-echo 仮想環境パス: "%VENV_PATH%"
+echo Virtual environment path: "%VENV_PATH%"
 
-rem venvが存在するか確認
+rem venvCheck if exists
 if exist "%VENV_PATH%" (
-    echo 仮想環境を検出しました: "%VENV_PATH%"
-    rem venvのアクティベートスクリプトが存在するか確認
+    echo Virtual environment detected: "%VENV_PATH%"
+    rem venvCheck if activation script exists
     if exist "%VENV_PATH%\Scripts\Activate.bat" (
-        echo 仮想環境をアクティベート中...
+        echo Activating virtual environment...
         call "%VENV_PATH%\Scripts\Activate.bat"
         echo Activation completed
         cd /d %~dp0
 
-        rem version.txtからバージョン読み込み
+        rem version.txtRead version from
         set "VERSION="
         for /f "usebackq delims=" %%i in (".\agesuta\version.txt") do (
             echo %%i
             set "VERSION=%%i"
         )
 
-        rem バージョン情報から改行コードを削除 - CRおよびLFに対応します
+        rem Remove newline code from version info - CR and LFsupported
         if "!VERSION:~-2!"=="\r\n" set "VERSION=!VERSION:~0,-2!"
         if "!VERSION:~-1!"=="\n" set "VERSION=!VERSION:~0,-1!"
         if "!VERSION:~-1!"=="\r" set "VERSION=!VERSION:~0,-1!"
@@ -52,7 +52,7 @@ if exist "%VENV_PATH%" (
             goto :end
         )
 
-        echo バージョン: !VERSION!
+        echo version: !VERSION!
 
         rem build関連コマンドのExecute
         cd /d %~dp0
@@ -67,7 +67,7 @@ if exist "%VENV_PATH%" (
         echo Building bdist_wheel...
         python setup.py bdist_wheel
 
-        rem TestPyPIへのアップロード
+        rem TestPyPIuploading to
         echo Uploading to TestPyPI...
         twine upload --repository testpypi dist/*
         if errorlevel 1 (
@@ -76,7 +76,7 @@ if exist "%VENV_PATH%" (
             goto :end
         )
 
-        rem PyPIへのアップロード
+        rem PyPIuploading to
         echo Uploading to PyPI...
         twine upload --repository pypi dist/*
         if errorlevel 1 (
@@ -85,15 +85,15 @@ if exist "%VENV_PATH%" (
             goto :end
         )
 
-        rem Gitコミットの安全な処理
-        echo Gitの変更状況を確認しています...
+        rem GitSafe handling of commit
+        echo GitChecking change status of...
         set "HAS_CHANGES="
         for /f "tokens=*" %%a in ('git status --porcelain') do set HAS_CHANGES=1
 
         if defined HAS_CHANGES (
-            echo 未コミットの変更を検出しました。Gitコミットを作成します...
+            echo Uncommitted changes detected。GitCreate commit...
             git add .
-            SET /P INPUTSTR="コミットメッセージを入力してください: "
+            SET /P INPUTSTR="Please enter commit message: "
             echo Committing with message: !VERSION! !INPUTSTR!
             git commit -m "!VERSION! !INPUTSTR!"
             if errorlevel 1 (
@@ -113,7 +113,7 @@ if exist "%VENV_PATH%" (
             goto :end
         )
 
-        rem GitHub CLIを使用したリリースとタグの作成
+        rem GitHub CLIrelease and tag creation using
         echo Creating GitHub release and tag: !VERSION!
         gh release create !VERSION! --title "!VERSION!" --notes "Release version !VERSION!"
         if errorlevel 1 (
@@ -125,17 +125,17 @@ if exist "%VENV_PATH%" (
 
         echo Release !VERSION! created successfully.
 
-        rem venvをディアクティベート
+        rem venvdeactivate
         call deactivate
-        echo ディActivation completed
+        echo Deactivation completed
 
     ) else (
-        echo エラー: アクティベートスクリプトが見つかりません: "%VENV_PATH%\Scripts\Activate.bat"
+        echo Error: Activation script not found: "%VENV_PATH%\Scripts\Activate.bat"
     )
     echo .
 
 ) else (
-    echo エラー: 仮想環境が見つかりません: "%VENV_PATH%"
+    echo Error: Virtual environment not found: "%VENV_PATH%"
     echo 仮想環境を作成するには、親フォルダで `python -m venv "%VENV_PATH%"` をExecuteしてください。
 )
 

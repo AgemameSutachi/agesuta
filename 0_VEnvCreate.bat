@@ -17,7 +17,7 @@ set DIRECTORY_PATH=%~dp0
 for %%i in ("%DIRECTORY_PATH:~0,-1%") do set THIS_DIRECTORY=%%~ni
 
 if exist %UserProfile%\temp\venv\%THIS_DIRECTORY% (
-    echo �������݂��邽�߁A�쐬���܂���: %UserProfile%\temp\venv\%THIS_DIRECTORY%
+    echo �������݂���߁A�쐬���܂���: %UserProfile%\temp\venv\%THIS_DIRECTORY%
     if exist %UserProfile%\temp\venv\%THIS_DIRECTORY%\Scripts\Activate.bat (
         call %UserProfile%\temp\venv\%THIS_DIRECTORY%\Scripts\Activate.bat
         echo �A�N�e�B�x�[�g����
