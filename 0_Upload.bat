@@ -40,7 +40,7 @@ if exist "%VENV_PATH%" (
             set "VERSION=%%i"
         )
 
-        rem バージョン情報から改行コードを削除 (CR, LF対応)
+        rem バージョン情報から改行コードを削除 - CRおよびLFに対応します
         if "!VERSION:~-2!"=="\r\n" set "VERSION=!VERSION:~0,-2!"
         if "!VERSION:~-1!"=="\n" set "VERSION=!VERSION:~0,-1!"
         if "!VERSION:~-1!"=="\r" set "VERSION=!VERSION:~0,-1!"
