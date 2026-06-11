@@ -27,21 +27,21 @@ echo Virtual environment path: "%VENV_PATH%"
 rem venvCheck if exists
 if exist "%VENV_PATH%" (
     echo Virtual environment detected: "%VENV_PATH%"
-    rem venvCheck if activation script exists
+        rem venvCheck if activation script exists
     if exist "%VENV_PATH%\Scripts\Activate.bat" (
         echo Activating virtual environment...
         call "%VENV_PATH%\Scripts\Activate.bat"
         echo Activation completed
         cd /d %~dp0
 
-        rem version.txtRead version from
+                rem version.txtRead version from
         set "VERSION="
         for /f "usebackq delims=" %%i in (".\agesuta\version.txt") do (
             echo %%i
             set "VERSION=%%i"
         )
 
-        rem Remove newline code from version info - CR and LFsupported
+                rem Remove newline code from version info - CR and LFsupported
         if "!VERSION:~-2!"=="\r\n" set "VERSION=!VERSION:~0,-2!"
         if "!VERSION:~-1!"=="\n" set "VERSION=!VERSION:~0,-1!"
         if "!VERSION:~-1!"=="\r" set "VERSION=!VERSION:~0,-1!"
@@ -54,7 +54,7 @@ if exist "%VENV_PATH%" (
 
         echo version: !VERSION!
 
-        rem build関連コマンドのExecute
+                rem build関連コマンドのExecute
         cd /d %~dp0
         echo Cleaning dist directory...
         if exist dist (
@@ -67,7 +67,7 @@ if exist "%VENV_PATH%" (
         echo Building bdist_wheel...
         python setup.py bdist_wheel
 
-        rem TestPyPIuploading to
+                rem TestPyPIuploading to
         echo Uploading to TestPyPI...
         twine upload --repository testpypi dist/*
         if errorlevel 1 (
@@ -76,7 +76,7 @@ if exist "%VENV_PATH%" (
             goto :end
         )
 
-        rem PyPIuploading to
+                rem PyPIuploading to
         echo Uploading to PyPI...
         twine upload --repository pypi dist/*
         if errorlevel 1 (
@@ -85,7 +85,7 @@ if exist "%VENV_PATH%" (
             goto :end
         )
 
-        rem GitSafe handling of commit
+                rem GitSafe handling of commit
         echo GitChecking change status of...
         set "HAS_CHANGES="
         for /f "tokens=*" %%a in ('git status --porcelain') do set HAS_CHANGES=1
@@ -113,7 +113,7 @@ if exist "%VENV_PATH%" (
             goto :end
         )
 
-        rem GitHub CLIrelease and tag creation using
+                rem GitHub CLIrelease and tag creation using
         echo Creating GitHub release and tag: !VERSION!
         gh release create !VERSION! --title "!VERSION!" --notes "Release version !VERSION!"
         if errorlevel 1 (
@@ -125,7 +125,7 @@ if exist "%VENV_PATH%" (
 
         echo Release !VERSION! created successfully.
 
-        rem venvdeactivate
+                rem venvdeactivate
         call deactivate
         echo Deactivation completed
 
