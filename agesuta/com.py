@@ -1,8 +1,6 @@
 import os
 import logging
-import time
 from datetime import datetime
-from logging import Formatter
 from logging import DEBUG, INFO, WARNING, ERROR, CRITICAL, NOTSET
 from rich.logging import RichHandler
 from logging.handlers import RotatingFileHandler
@@ -10,15 +8,14 @@ from chardet.universaldetector import UniversalDetector
 import inspect
 import re
 import sys
-import ssl
-import certifi
 import zoneinfo
-import tzdata
+
+# tzdata は zoneinfo が参照するタイムゾーンデータを提供する（特に Windows で必須）。
+# 直接は使用しないが、依存関係を保証するためにインポートしておく。
+import tzdata  # noqa: F401
 
 # JSTタイムゾーンオブジェクトの定義
 JST = zoneinfo.ZoneInfo("Asia/Tokyo")
-
-ssl_context = ssl.create_default_context(cafile=certifi.where())
 
 
 # ANSI エスケープシーケンスを除去する Formatter
@@ -62,7 +59,9 @@ class CustomLevelRotatingFileHandler(RotatingFileHandler):
                 files_with_index.append((idx, ts, fname))
 
         # 番号が大きい順にずらす
-        for idx, ts, fname in sorted(files_with_index, key=lambda x: x[0], reverse=True):
+        for idx, ts, fname in sorted(
+            files_with_index, key=lambda x: x[0], reverse=True
+        ):
             full_path = os.path.join(log_dir, fname)
             if idx >= self.backupCount:
                 try:
@@ -188,7 +187,6 @@ class CustomDateRotatingFileHandler(RotatingFileHandler):
             self.stream = self._open()
 
 
-
 class CustomLogger:
     def __init__(
         self,
@@ -255,7 +253,7 @@ class CustomLogger:
                 return 0, "CP932"
             else:
                 return 0, detector.result["encoding"]
-        except:
+        except Exception:
             return 2, ""
 
     def change_encode(self, filepath, after_encode):
@@ -269,7 +267,7 @@ class CustomLogger:
                 return 0
             try:
                 os.rename(filepath, filepath + "_bk")
-            except:
+            except Exception:
                 if os.path.exists(filepath):
                     os.remove(filepath)
                 # リネーム失敗時は削除して返す
@@ -283,12 +281,12 @@ class CustomLogger:
                 with open(filepath, "w", encoding=after_encode) as f:
                     f.write(txt)
                 os.remove(filepath + "_bk")
-            except:
+            except Exception:
                 if os.path.exists(filepath):
                     os.remove(filepath)
                 return 1
             return 0
-        except:
+        except Exception:
             return 1
 
     def get_script_display_name(self):
@@ -342,7 +340,7 @@ class CustomLogger:
         if backupCount is not None:
             self.backupCount = int(backupCount)
         if encoding is not None:
-            self.encoding = str(encoding)
+            self.log_encode = str(encoding)
         if showlevel is not None:
             self.showlevel = self.level_dic.get(showlevel.upper(), INFO)
         self.log_main()
@@ -368,7 +366,7 @@ class CustomLogger:
                 f"{self.dir_path}/{importname}{datetime.now(JST):%Y-%m-%d}.log"
             )
             if os.path.exists(logfile_path):
-                ret = self.change_encode(logfile_path, self.log_encode)
+                self.change_encode(logfile_path, self.log_encode)
             file_handler = CustomDateRotatingFileHandler(
                 logfile_path,
                 "a",
@@ -397,7 +395,7 @@ class CustomLogger:
             for i in list(loggger_dic.keys()):
                 logfile_path = f"{self.dir_path}/{i}.log"
                 if os.path.exists(logfile_path):
-                    ret = self.change_encode(logfile_path, self.log_encode)
+                    self.change_encode(logfile_path, self.log_encode)
                 logger_temp = CustomLevelRotatingFileHandler(
                     logfile_path,
                     "a",
@@ -426,7 +424,8 @@ def log_decorator(logger):
                 bound_args = sig.bind_partial(*args, **kwargs)
                 bound_args.apply_defaults()
                 log_args = {
-                    k: v for k, v in bound_args.arguments.items()
+                    k: v
+                    for k, v in bound_args.arguments.items()
                     if k not in ("self", "cls")
                 }
             except Exception:
@@ -447,7 +446,6 @@ def log_decorator(logger):
         return wrapper
 
     return _log_decorator
-
 
 
 if __name__ == "__main__":

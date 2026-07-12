@@ -1,14 +1,15 @@
-from .com import log_decorator, CustomLogger
+from .com import log_decorator
 import logging
+import re
 import ssl
 import certifi
 from .configmanager import ConfigManager
 import inspect
-from traceback import TracebackException as TE
 
 try:
     from slack_sdk import WebClient
     from slack_sdk.errors import SlackApiError
+
     HAS_SLACK_SDK = True
 except ImportError:
     WebClient = None
@@ -17,6 +18,7 @@ except ImportError:
 
 try:
     import requests
+
     HAS_REQUESTS = True
 except ImportError:
     requests = None
@@ -120,8 +122,11 @@ class SlackPoster:
             self.logger.error("Slack client is not initialized.")
             return 1, ""
 
-        # name がすでにチャンネルID形式 (C/G/Dで始まる9桁以上の英数字) の場合はそのまま返す
-        if name and (name.startswith("C") or name.startswith("G") or name.startswith("D")) and len(name) >= 9:
+        # name がすでにチャンネルID形式の場合はそのまま返す（API呼び出しを節約）。
+        # Slack のチャンネル/グループ/DM ID は C/G/D で始まる大文字英数字。
+        # チャンネル名は小文字・ハイフン・アンダースコアのみ許可され大文字を含まないため、
+        # 「大文字英数字のみ」で判定すれば名前との誤検知を避けられる。
+        if name and re.fullmatch(r"[CGD][A-Z0-9]{8,}", name):
             return 0, name
 
         try:

@@ -1,4 +1,3 @@
-from .com import log_decorator, CustomLogger
 import logging
 import os
 import configparser
@@ -11,17 +10,26 @@ class ConfigManager:
     def __init__(
         self,
         default_dic: dict,
-        type_dic: dict = {},
-        config_path: str = os.path.basename(os.getcwd()) + ".ini",
+        type_dic: dict = None,
+        config_path: str = None,
         encoding: str = "utf-8",
-        logger_instance=logging.getLogger(__name__),
+        logger_instance=None,
     ):
+        # 可変オブジェクトを既定値に使うと全インスタンスで共有されるため、None で受けて内部生成する
         self.default_dic_initial = default_dic.copy()
         self.config_dic = {}  # 型変換後の値を格納
-        self.type_dic = type_dic
+        self.type_dic = type_dic if type_dic is not None else {}
+        # config_path 未指定時は「呼び出し時点」のカレントディレクトリ名を用いる
+        # （既定引数で評価するとインポート時の cwd に固定されてしまう）
+        if config_path is None:
+            config_path = os.path.basename(os.getcwd()) + ".ini"
         self.config_path = str(Path(config_path).absolute())
         self.encoding = encoding
-        self.logger = logger_instance
+        self.logger = (
+            logger_instance
+            if logger_instance is not None
+            else logging.getLogger(__name__)
+        )
 
         # config_dic のキーの順序を default_dic_initial に合わせる
         for key in self.default_dic_initial.keys():
@@ -68,6 +76,9 @@ class ConfigManager:
         環境変数が設定されている場合は、INIファイルやデフォルト値よりも優先する。
         """
         config_ini = configparser.ConfigParser()
+        # 書き込み側 (config_generator) と揃えてキーの大文字・小文字を保持する。
+        # 既定では小文字化されるため、大文字を含むキーが読み戻せなくなる。
+        config_ini.optionxform = str
         try:
             read_files = config_ini.read(self.config_path, encoding=self.encoding)
             if not read_files:

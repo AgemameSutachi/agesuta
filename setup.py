@@ -15,10 +15,11 @@ def read(fname):
 _package_dir = os.path.dirname(__file__)
 version_file_path = os.path.join(_package_dir, "agesuta", "version.txt")
 if os.path.exists(version_file_path):
-    with open(version_file_path, "r") as f:
-        version = f.read().replace("\n", "")
+    with open(version_file_path, "r", encoding="utf-8") as f:
+        version = f.read().strip()
 else:
-    version = None
+    # version.txt が無い場合でも setup() が失敗しないようフォールバック
+    version = "0.0.0"
 
 setup(
     name="agesuta",  # パッケージ名 (pip install時に使われる名前)
@@ -27,13 +28,9 @@ setup(
     install_requires=[  # このパッケージが依存する外部ライブラリ
         "certifi>=2025.4.26",
         "chardet>=5.2.0",
-        "charset-normalizer>=3.4.2",
-        "idna>=3.10",
-        "markdown-it-py>=3.0.0",
-        "mdurl>=0.1.2",
-        "Pygments>=2.19.1",
         "rich>=14.0.0",
-        "urllib3>=2.4.0",
+        # Windows など tz データを持たない環境で zoneinfo を使うために必須
+        "tzdata>=2024.1",
     ],
     extras_require={  # 特定機能でのみ使用するオプショナルな依存関係
         "slack": [
@@ -56,16 +53,15 @@ setup(
         "Topic :: Communications :: Chat",  # Slack連携に関連するトピックを追加
         "License :: OSI Approved :: MIT License",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.6",
-        "Programming Language :: Python :: 3.7",
-        "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
         "Programming Language :: Python :: 3.12",
+        "Programming Language :: Python :: 3.13",
     ],
     keywords="logging custom logger rich file rotation slack requests utility",  # PyPIでの検索キーワード (更新)
-    python_requires=">=3.6",  # 必須Pythonバージョン
+    # zoneinfo（標準ライブラリ）を使用するため Python 3.9 以上が必須
+    python_requires=">=3.9",  # 必須Pythonバージョン
     # ここに package_data を追加します
     package_data={
         "agesuta": ["date.txt", "version.txt"],
