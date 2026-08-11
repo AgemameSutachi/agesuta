@@ -29,7 +29,7 @@ from agesuta import CustomLogger, log_decorator
 # ロガーの初期設定を行うインスタンスを作成します
 # これにより、ルートロガーにハンドラが設定されます
 Cl_logger = CustomLogger(
-    flag_datelog=False, # 日付ベース of 単一ログファイルにする場合は True に設定
+    flag_datelog=False, # 日付ベースの単一ログファイルにする場合は True に設定
     dir_path="./Log",
     log_encode="utf-8",
     showlevel="INFO", # コンソール出力の最小レベル
