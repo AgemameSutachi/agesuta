@@ -63,6 +63,8 @@ logger.critical("これはクリティカルメッセージです。")
 `flag_datelog` が `False` の場合、異なるレベル（例: `my_script_0_debug.log`, `my_script_1_info.log` など）ごとに個別のログファイルが `dir_path` に作成されます。
 `flag_datelog` が `True` の場合、日付を含む単一のログファイル（例: `my_script_YYYY-MM-DD.log`）が作成されます。
 
+いずれの場合も、ファイルには`DEBUG`以上の全レベルのログメッセージが出力され、`maxBytes`/`backupCount`で指定したサイズ・世代数に基づいてローテーションされます（`showlevel`はコンソール表示のみに影響し、ファイル出力の対象レベルには影響しません）。
+
 ## CustomLogger パラメータ
 
 - `flag_datelog` (`bool`): `True`の場合、日付ベースのログファイル命名規則（`basename_YYYY-MM-DD.log`）を使用し、`CustomDateRotatingFileHandler`を使用します。`False`（デフォルト）の場合、レベルベースのログファイル命名規則（`basename_level.log`）を使用し、`CustomLevelRotatingFileHandler`を使用します。
