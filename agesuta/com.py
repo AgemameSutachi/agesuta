@@ -188,6 +188,14 @@ class CustomDateRotatingFileHandler(RotatingFileHandler):
 
 
 class CustomLogger:
+    """
+    アプリケーション全体のロギング設定を管理するクラス。
+
+    コンソール出力用の RichHandler と、ファイル出力用のローテーティング
+    ハンドラ（レベル別 or 日付別）を組み合わせてロガーを構築する責務を持つ。
+    出力するログの意図（何を・どのレベルで・どこに残すか）は log_main で決定される。
+    """
+
     def __init__(
         self,
         flag_datelog: bool = False,
