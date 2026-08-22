@@ -24,6 +24,9 @@ class NoColorFormatter(logging.Formatter):
     ANSI_ESCAPE = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
 
     def format(self, record):
+        # record: フォーマット対象の LogRecord。
+        # 戻り値: 通常の Formatter でフォーマットした文字列から
+        #         ANSI エスケープシーケンス（色付け等）を取り除いた文字列。
         msg = super().format(record)
         # ANSI シーケンスを空文字に置換
         return self.ANSI_ESCAPE.sub("", msg)
