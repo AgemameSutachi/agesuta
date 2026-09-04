@@ -113,6 +113,44 @@ def test_request_url_key_parameter_is_masked():
     assert "channelId=UCabc" in masked, "無関係なパラメータが壊れている"
 
 
+def test_keyed_value_wrapped_in_quotes_is_masked():
+    """★★★2026-09-04・実データ突き合わせで発覚: 値が区切りの直後に引用符で
+    始まる形（JSON形式のapi_key: "xxx"等）は、値の文字クラスが引用符を
+    除外しているため一致すら試みず完全に見逃していた。★これは本番稼働中の
+    マスク(138ab24)にも影響する実際の見逃しだった。ダブルクォート・
+    シングルクォートの両方、引用符が前後で保たれたまま値だけ隠れることを
+    確認する。
+    """
+    fake = "a" * 45
+    for quote in ('"', "'", ""):
+        text = f"api_key: {quote}{fake}{quote}"
+        assert count_secrets_in_text(text) >= 1, f"見逃している: quote={quote!r}"
+        masked = mask_secrets_in_text(text)
+        assert fake not in masked, f"値が残っている: quote={quote!r}"
+        if quote:
+            assert masked.count(quote) == 2, f"引用符が保たれていない: {masked!r}"
+
+
+def test_keyword_prefixed_by_variable_name_is_masked():
+    """★★★★2026-09-04・実データ(quiz-web-app)突き合わせで発覚(本当の主因):
+    実データで独立実装との差112件を1件ずつ確認したところ、全件が
+    "gemini_api_key: 'xxx'" のように【変数名がキーワードに"_"で連結
+    された形】だった。キーワード先頭の`\\b`は「単語構成文字どうしの
+    境界なし」を意味し、"_"も単語構成文字のため"gemini_"の直後の
+    "api_key"には境界が無く、一致自体が起きていなかった
+    （引用符の見逃しとは別の、独立した原因）。★これも本番稼働中の
+    マスク(138ab24)に影響する実際の見逃しだった。
+    """
+    fake = "b" * 45
+    for prefixed_keyword in (f"gemini_api_key: {fake}", f"DB_PASSWORD: {fake}"):
+        assert (
+            count_secrets_in_text(prefixed_keyword) >= 1
+        ), f"見逃している: {prefixed_keyword.split(':')[0]}"
+        masked = mask_secrets_in_text(prefixed_keyword)
+        assert fake not in masked
+        assert prefixed_keyword.split(":")[0] in masked, "項目名まで消えている"
+
+
 def test_url_query_bracket_placeholder_is_not_masked():
     """★★★2026-09-04・事務局(検証役)発見・窓口裁定で修正:
     "?key=[slack_channel]&page=2" のような、値が"["で始まる設定項目名の

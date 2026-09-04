@@ -37,11 +37,31 @@ _SECRET_PATTERNS = [
         r"(?i)([?&](?:key|api_key|apikey|access_token|refresh_token|token)=)"
         r"([^&\s\"'\[\)\]}]+)"
     ),
-    # 設定ファイルから読み込んだ値の出力 (slack_token: xxx / APP_PASSWORD = xxx)
+    # 設定ファイルから読み込んだ値の出力 (slack_token: xxx / APP_PASSWORD = xxx /
+    # JSON形式の api_key: "xxx" も含む)。
+    # ★★★2026-09-04・実データ(mainpc)の突き合わせで発覚(1点目): 値が区切り記号の
+    #   直後に引用符で始まる形（例: api_key: "xxx"）だと、値の文字クラスが
+    #   引用符を除外しているため【一致すら試みず完全に見逃していた】。
+    #   区切りのあとの引用符1個だけを任意（省略可）で拾う専用の組にし、
+    #   出力側では前置き（キー名＋区切り＋引用符）として温存する
+    #   （mask_secrets_in_text()の"".join(m.groups()[:-1])がそのまま使える）。
+    # ★★★★2026-09-04・実データ(quiz-web-app)の突き合わせで発覚(2点目・
+    #   本当の主因): 独立実装との差112件を1件ずつ確認したところ、全件が
+    #   "gemini_api_key" のような【変数名がキーワードに"_"で連結された形】
+    #   だった。キーワード先頭の`\b`は正規表現上「単語構成文字どうしの
+    #   境界なし」を意味し、"_"も単語構成文字のため、"gemini_" の直後の
+    #   "api_key" には境界が無く一致自体が起きない
+    #   （実測: 直前1文字を集計すると112件すべてが"_"）。
+    #   ★これは本番稼働中のマスク(commit 138ab24)にも影響する実際の見逃し
+    #   （変数名にプロバイダ名等を前置きする命名は他プロジェクトにも
+    #   ありうる）。
+    #   → キーワード直前の境界条件を、英数字（A-Za-z0-9）が直前に無ければ
+    #   一致してよい形に緩め（"_"の直前は許可）、誤検出は従来どおり
+    #   文字（アルファベット）が直前にある場合だけ防ぐ。
     re.compile(
-        r"(?i)\b(slack_token|slack_app_token|app_password|client_secret|"
+        r"(?i)(?<![A-Za-z0-9])(slack_token|slack_app_token|app_password|client_secret|"
         r"api_key|apikey|openai_api_key|github_token|password)"
-        r"(\s*[=:]\s*)([^\s,;\"'\)\]}]+)"
+        r"(\s*[=:]\s*)([\"']?)([^\s,;\"'\)\]}]+)"
     ),
     # --- 一致した箇所ごと隠すパターン(その形式でしかありえないもの) ---
     # YouTube Data API のキー
