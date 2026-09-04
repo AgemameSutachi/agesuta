@@ -61,14 +61,45 @@ _KEYED_PATTERN_COUNT = 2
 _SECRET_KEEP_CHARS = 6
 
 
+# ★★★2026-09-04・事務局(検証役)が実測で発見: 2回連続でmask_secrets_in_text()
+#   を通すと、種別の接頭辞（"xoxb-1"等）ごと伏せ字に潰れる（冪等ではない）。
+#   原因: 1回目のマスク後の残骸「xoxb-1」（6文字＝keepぴったり）が2回目の
+#   標準パターンに再一致し、mask_secret()の`len(text)<=keep`分岐が
+#   「短い値は全部隠す」を適用してしまう（残骸を新しい生の短い値と
+#   区別できない）。→ mask_secret()自身に、値が既に"*"を含んでいたら
+#   （＝既に他の処理でマスク済み）そのまま返す近道を持たせる。
+_MIN_RAW_LENGTH = 13
+
+
 def mask_secret(value, keep: int = _SECRET_KEEP_CHARS) -> str:
-    """APIキーやトークンをログへ出すためにマスクする。先頭keep文字だけ残す。"""
+    """APIキーやトークンをログへ出すためにマスクする。先頭keep文字だけ残す。
+
+    ★値が既に"*"を含む場合は、他の処理で既にマスク済みとみなしてそのまま
+    返す（冪等性の担保・上のコメント参照）。生の値が"*"を含むことは
+    実務上考えにくい（この関数が対象とする形式はいずれも英数字・記号
+    少数のみで、"*"はそのいずれにも含まれない）。
+    """
     if value is None:
         return ""
     text = str(value)
+    if "*" in text:
+        return text
     if len(text) <= keep:
         return "*" * len(text)
     return text[:keep] + "*" * (len(text) - keep)
+
+
+def _is_raw_candidate(value: str) -> bool:
+    """まだ伏せられていない「生の値」らしいかを判定する（数える側・隠す側で共通）。
+
+    ★★★2026-09-04・事務局(検証役)が実測で発見した、いちばん重い指摘:
+      count_secrets_in_text()は長さで絞っているのに、mask_secrets_in_text()
+      は絞っておらず、判定基準が2箇所でずれていた。「件数0なのに書き換わる」
+      （例: "api_key: なし" → count=0だがmaskすると書き換わっていた）という、
+      数える対象と書き換える対象が一致しない状態を生んでいた。
+      → 判定をこの1関数へ集約し、両方から呼ぶ（2箇所に持たない）。
+    """
+    return bool(value) and len(value) > _MIN_RAW_LENGTH and "*" not in value
 
 
 def mask_secrets_in_text(text: str) -> str:
@@ -85,20 +116,76 @@ def mask_secrets_in_text(text: str) -> str:
       　 キー付きパターンは、その後の残骸に対しては冪等（伏せ字を
       　 伏せ字で置き換えるだけ）になり、形式で判別できない値
       　 （キー名だけが手がかりのもの）はそのままキー付きパターンが拾う。
+    ★★★_is_raw_candidate()を満たさない一致（短すぎる・既に伏せ字を含む）は
+      置き換えない。count_secrets_in_text()と同じ判定を使うことで、
+      「数えた値」と「書き換わる値」を一致させる（事務局指摘）。
     """
     if not text:
         return text
     result = str(text)
     # 形式から判別できるものを先に一致箇所ごと置き換える
     for pattern in _SECRET_PATTERNS[_KEYED_PATTERN_COUNT:]:
-        result = pattern.sub(lambda m: mask_secret(m.group(0)), result)
+        result = pattern.sub(
+            lambda m: (
+                mask_secret(m.group(0)) if _is_raw_candidate(m.group(0)) else m.group(0)
+            ),
+            result,
+        )
     # 項目名付きのものは、どの項目かが分かるよう値の部分だけを置き換える
     # （形式パターンで既に隠れている値には冪等に働く）
     for pattern in _SECRET_PATTERNS[:_KEYED_PATTERN_COUNT]:
         result = pattern.sub(
-            lambda m: "".join(m.groups()[:-1]) + mask_secret(m.groups()[-1]), result
+            lambda m: (
+                "".join(m.groups()[:-1]) + mask_secret(m.groups()[-1])
+                if _is_raw_candidate(m.groups()[-1])
+                else m.group(0)
+            ),
+            result,
         )
     return result
+
+
+def count_secrets_in_text(text: str) -> int:
+    """文字列中の、まだ伏せられていない（生の）認証情報形の一致数を数える。
+
+    ★既存ログの走査（既存ログの伏せ字置換・2026-09-04）用。
+    mask_secrets_in_text()と同じパターン定義・同じ_is_raw_candidate()判定を
+    使い回す（判定基準を2箇所に持たない・事務局指摘で統一した）。
+    ★値は返さない・書き換えない。
+    ★1つの値がキー付きパターンと形式パターンの両方に一致することがある
+    （例: "slack_token: xoxb-..."）。ここでは「まだ生の値が残っている
+    箇所の延べ数」を返す（去重はしない）。
+    """
+    if not text:
+        return 0
+    count = 0
+    for pattern in _SECRET_PATTERNS[_KEYED_PATTERN_COUNT:]:
+        for m in pattern.finditer(text):
+            if _is_raw_candidate(m.group(0)):
+                count += 1
+    for pattern in _SECRET_PATTERNS[:_KEYED_PATTERN_COUNT]:
+        for m in pattern.finditer(text):
+            if _is_raw_candidate(m.groups()[-1]):
+                count += 1
+    return count
+
+
+# ★既存ログの走査で「マスク済みのものと、まだ生のものを分けて数える」ため
+#   （窓口指摘・2026-09-04）。mask_secret()の出力形（既知の接頭辞＋任意の
+#   文字＋1個以上の伏せ字）をそのまま検出する。★count_secrets_in_textとは
+#   別の観点（「残骸が実在するか」）を数えるため、意図的に別関数にする
+#   （1つの関数に両方の判定を混ぜると、閾値の変更時に両方の意味が
+#   同時に変わってしまう）。
+_MASKED_RESIDUE_RE = re.compile(
+    r"\b(?:AIza|xox[baprs]-|xapp-|sk-|ghp_|tk_)[0-9A-Za-z_\-]*\*+"
+)
+
+
+def count_masked_in_text(text: str) -> int:
+    """既にマスク済み（接頭辞＋伏せ字）に見える箇所の数を数える。"""
+    if not text:
+        return 0
+    return len(_MASKED_RESIDUE_RE.findall(text))
 
 
 class MaskingFormatter(logging.Formatter):

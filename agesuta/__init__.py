@@ -1,7 +1,13 @@
 from .com import log_decorator, CustomLogger
 from .configmanager import ConfigManager
 from .slackapi import SlackPoster
-from .secretmask import mask_secret, mask_secrets_in_text, install_secret_mask
+from .secretmask import (
+    mask_secret,
+    mask_secrets_in_text,
+    count_secrets_in_text,
+    count_masked_in_text,
+    install_secret_mask,
+)
 import os
 
 __all__ = [
@@ -11,6 +17,8 @@ __all__ = [
     "SlackPoster",
     "mask_secret",
     "mask_secrets_in_text",
+    "count_secrets_in_text",
+    "count_masked_in_text",
     "install_secret_mask",
 ]
 

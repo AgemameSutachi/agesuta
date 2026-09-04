@@ -15,6 +15,8 @@ import pytest
 
 from agesuta.secretmask import (
     MaskingFormatter,
+    count_masked_in_text,
+    count_secrets_in_text,
     install_secret_mask,
     mask_secret,
     mask_secrets_in_text,
@@ -127,6 +129,103 @@ def test_normal_text_is_not_broken():
         "https://www.youtube.com/watch?v=1-NyiwtlG3Q",
     ]:
         assert mask_secrets_in_text(text) == text, f"壊れた: {text}"
+
+
+def test_count_secrets_counts_raw_tokens():
+    """生のトークンは形式ごとに1件として数える"""
+    text = (
+        "a: xoxb" + "-1111111111111-2222222222222-abcdefghijklmnopqrstuvwx\n"
+        "b: " + "AIza" + "A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r" + "\n"
+        "c: normal text with no secret\n"
+    )
+    assert count_secrets_in_text(text) == 2
+
+
+def test_count_secrets_does_not_recount_masked_residue():
+    """★2026-09-04・窓口指摘（相談役発見）: マスク済みの残骸（接頭辞のみ）を
+    生の値として二重に数えない。数えてしまうと「マスクしても検証の一致数が
+    0にならない」——正しく動いても永久に通らない検証になる。
+    """
+    raw = "slack: xoxb" + "-1111111111111-2222222222222-abcdefghijklmnopqrstuvwx"
+    assert count_secrets_in_text(raw) == 1
+
+    masked = mask_secrets_in_text(raw)
+    assert "xoxb-1" in masked  # 接頭辞は残る設計
+    assert (
+        count_secrets_in_text(masked) == 0
+    ), "マスク済みの残骸を生の値として数えてしまっている"
+
+
+def test_count_secrets_does_not_recount_masked_value_in_keyed_form():
+    """★2026-09-04・実測で発覚した回帰: キー付きパターン(slack_token: xxx)の
+    値グループは伏せ字("*")まで含めて捕らえるため、既にマスク済みの値は
+    長さだけでは生の値と見分けが付かない（見かけの長さは元の値と同じに
+    なるため）。値に"*"を含むものは数えないこと。
+    """
+    raw = "slack_token: xoxb" + "-1111111111111-2222222222222-abcdefghijklmnopqrstuvwx"
+    assert count_secrets_in_text(raw) >= 1
+
+    masked = mask_secrets_in_text(raw)
+    assert (
+        count_secrets_in_text(masked) == 0
+    ), "キー付きパターン経由で残骸を生と誤数している"
+
+
+def test_count_secrets_is_zero_after_masking_all_pattern_kinds():
+    """各パターン種別で、マスク後にcountが0になることを確認する（回帰防止）"""
+    samples = [
+        "xoxb" + "-3333333333333-4444444444444-zzzzzzzzzzzzzzzzzzzzzzzz",
+        "xapp" + "-1-A0000000000-1111111111111-abcdefghijklmnopqrstuvwxyz012345",
+        "AIza" + "Q1w2E3r4T5y6U7i8O9p0A1s2D3f4G5h6J7k",
+        "sk-" + "abcdefghijklmnopqrstuvwxyz987654",
+        "ghp_" + "abcdefghijklmnopqrstuvwxyz0123456789",
+        "tk_" + "abcdefghijklmnop9999",
+    ]
+    for raw in samples:
+        assert (
+            count_secrets_in_text(raw) >= 1
+        ), f"生の値が検出できていない: {raw[:10]}..."
+        masked = mask_secrets_in_text(raw)
+        assert (
+            count_secrets_in_text(masked) == 0
+        ), f"マスク後も検出された: {raw[:10]}..."
+
+
+def test_count_masked_distinguishes_raw_from_masked():
+    """count_masked_in_text: 生の値は0件・マスク済みの残骸は1件として数える"""
+    raw = "xoxb" + "-1111111111111-2222222222222-abcdefghijklmnopqrstuvwx"
+    assert count_masked_in_text(raw) == 0, "生の値をマスク済みと誤検出している"
+
+    masked = mask_secrets_in_text(raw)
+    assert count_masked_in_text(masked) == 1
+    assert count_secrets_in_text(masked) == 0
+
+
+def test_mask_secrets_in_text_is_idempotent_across_calls():
+    """★★★2026-09-04・事務局(検証役)が実測で発見した回帰:
+    mask_secrets_in_text()を2回連続で通すと、種別の接頭辞（"xoxb-1"等）
+    ごと伏せ字に潰れていた（冪等ではなかった）。原因は1回目の残骸
+    （keepぴったりの6文字）が2回目でmask_secret()の「短い値は全部隠す」
+    分岐に飲まれたため。既存ログへ繰り返し適用しても壊れないことが必須
+    （書き換えは元に戻せない）。
+    """
+    raw = "slack_token: xoxb" + "-1111111111111-2222222222222-abcdefghijklmnopqrstuvwx"
+    once = mask_secrets_in_text(raw)
+    twice = mask_secrets_in_text(once)
+    assert once == twice, "2回目の適用で結果が変わった（冪等ではない）"
+    assert "xoxb-1" in twice, "2回目で種別プレフィックスが消えた"
+
+
+def test_mask_and_count_use_the_same_threshold():
+    """★★★2026-09-04・事務局(検証役)が実測で発見した、いちばん重い指摘:
+    count_secrets_in_text()とmask_secrets_in_text()の判定基準が
+    ずれており、「件数0なのに実際には書き換わる」行があった
+    （例: "api_key: なし" のような短い値）。数える対象と書き換わる対象を
+    一致させる（_is_raw_candidate()に統一）。
+    """
+    text = "api_key: なし"
+    assert count_secrets_in_text(text) == 0
+    assert mask_secrets_in_text(text) == text, "countは0なのにmaskで書き換わっている"
 
 
 def test_formatter_masks_traceback():
