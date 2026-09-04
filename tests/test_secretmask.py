@@ -113,6 +113,17 @@ def test_request_url_key_parameter_is_masked():
     assert "channelId=UCabc" in masked, "無関係なパラメータが壊れている"
 
 
+def test_url_query_bracket_placeholder_is_not_masked():
+    """★★★2026-09-04・事務局(検証役)発見・窓口裁定で修正:
+    "?key=[slack_channel]&page=2" のような、値が"["で始まる設定項目名の
+    プレースホルダ表記は、"?"の直後という位置条件だけでは除外できず
+    誤ってマスクされていた。値が"["で始まるものはマッチさせない。
+    """
+    text = "?key=[slack_channel]&page=2"
+    assert mask_secrets_in_text(text) == text
+    assert count_secrets_in_text(text) == 0
+
+
 def test_bluesky_app_password_is_masked():
     """Blueskyのアプリパスワード形式(4文字x4組)もマスクする"""
     app_password = "abcd-efgh-ijkl-mnop"
