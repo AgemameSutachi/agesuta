@@ -162,11 +162,28 @@ def test_url_query_bracket_placeholder_is_not_masked():
     assert count_secrets_in_text(text) == 0
 
 
-def test_bluesky_app_password_is_masked():
-    """Blueskyのアプリパスワード形式(4文字x4組)もマスクする"""
+def test_bluesky_app_password_is_masked_via_keyword_not_shape():
+    """★★★★★2026-09-04・窓口裁定: 接頭辞なし・4文字ハイフン区切り4組の形式
+    パターン自体は外した(video hubの実ログでURLスラッグに誤爆・4ファイル238件の
+    実在を確認したため)。実使用のBlueskyアプリパスワード(yt2calendar/
+    blueskyapi.py)は"password"キーとして渡るため、項目名つきパターンで
+    引き続きマスクされることを確認する。
+    """
     app_password = "abcd-efgh-ijkl-mnop"
     masked = mask_secrets_in_text(f"APP_PASSWORD = {app_password}")
     assert app_password not in masked
+
+
+def test_bare_four_by_four_shape_is_no_longer_masked():
+    """★★★★★形式だけ(項目名を伴わない4文字ハイフン区切り4組)は、もう
+    マスクされない(窓口裁定・上記参照)。★この裁定は「いま見つからなかった」
+    であって「存在しない」ではない——将来、値を項目名なしでログへ出す
+    コードが書かれれば、この形では拾えなくなる。
+    """
+    bare = "abcd-efgh-ijkl-mnop"
+    text = f"https://example.com/video/12345/some-{bare}-title-slug"
+    assert count_secrets_in_text(text) == 0
+    assert mask_secrets_in_text(text) == text
 
 
 def test_normal_text_is_not_broken():
