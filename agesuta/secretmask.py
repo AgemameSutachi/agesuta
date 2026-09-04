@@ -72,23 +72,39 @@ _SECRET_KEEP_CHARS = 6
 #   原因: 1回目のマスク後の残骸「xoxb-1」（6文字＝keepぴったり）が2回目の
 #   標準パターンに再一致し、mask_secret()の`len(text)<=keep`分岐が
 #   「短い値は全部隠す」を適用してしまう（残骸を新しい生の短い値と
-#   区別できない）。→ mask_secret()自身に、値が既に"*"を含んでいたら
-#   （＝既に他の処理でマスク済み）そのまま返す近道を持たせる。
+#   区別できない）。
 _MIN_RAW_LENGTH = 13
+
+# ★★★★2026-09-04・窓口裁定（事務局が実測で発見した「穴3」）: 上の対策で
+#   「値が"*"を含むなら既にマスク済み」としたが、それは【形式パターン】
+#   にしか成立しない。項目名つきパターン（password= / client_secret: 等）の
+#   値は利用者が決める任意文字列で、"*"を普通に含む
+#   （実測: "password = Pa*ssw0rd-Long-Enough-Value-123" が件数0・素通り）。
+#   → 「"*"を含むか」ではなく【mask_secret()の出力そのものの形】で判定する:
+#   非"*"の先頭が_SECRET_KEEP_CHARS文字以内で、そのあとが"*"の連続のみ。
+#   これなら埋め込みの"*"を持つ生の値（例の"Pa*ssw0rd..."）は
+#   非"*"部分が6文字を超えるため「マスク済み」と誤認しない。
+_ALREADY_MASKED_RE = re.compile(r"^[^*]{0,%d}\*+$" % _SECRET_KEEP_CHARS)
+
+
+def _looks_already_masked(value: str) -> bool:
+    """mask_secret()の出力と同じ形（先頭keep文字以内＋残り全部"*"）かを見る。"""
+    return bool(_ALREADY_MASKED_RE.match(value or ""))
 
 
 def mask_secret(value, keep: int = _SECRET_KEEP_CHARS) -> str:
     """APIキーやトークンをログへ出すためにマスクする。先頭keep文字だけ残す。
 
-    ★値が既に"*"を含む場合は、他の処理で既にマスク済みとみなしてそのまま
-    返す（冪等性の担保・上のコメント参照）。生の値が"*"を含むことは
-    実務上考えにくい（この関数が対象とする形式はいずれも英数字・記号
-    少数のみで、"*"はそのいずれにも含まれない）。
+    ★値が既にmask_secret()の出力の形（先頭keep文字以内＋残り全部"*"）を
+    しているなら、他の処理で既にマスク済みとみなしてそのまま返す
+    （冪等性の担保）。「"*"を含むか」では判定しない——項目名つきパターンの
+    値は利用者が決める任意文字列で"*"を普通に含みうる（窓口裁定・
+    事務局実測「穴3」）。
     """
     if value is None:
         return ""
     text = str(value)
-    if "*" in text:
+    if _looks_already_masked(text):
         return text
     if len(text) <= keep:
         return "*" * len(text)
@@ -104,8 +120,14 @@ def _is_raw_candidate(value: str) -> bool:
       （例: "api_key: なし" → count=0だがmaskすると書き換わっていた）という、
       数える対象と書き換える対象が一致しない状態を生んでいた。
       → 判定をこの1関数へ集約し、両方から呼ぶ（2箇所に持たない）。
+    ★★★★「既にマスク済みか」は_looks_already_masked()（形での判定）を使う。
+      "*"を含むかどうかでは判定しない（上のmask_secret()と同じ理由）。
     """
-    return bool(value) and len(value) > _MIN_RAW_LENGTH and "*" not in value
+    return (
+        bool(value)
+        and len(value) > _MIN_RAW_LENGTH
+        and not _looks_already_masked(value)
+    )
 
 
 def mask_secrets_in_text(text: str) -> str:

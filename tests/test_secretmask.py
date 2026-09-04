@@ -227,6 +227,26 @@ def test_mask_secrets_in_text_is_idempotent_across_calls():
     assert "xoxb-1" in twice, "2回目で種別プレフィックスが消えた"
 
 
+def test_embedded_asterisk_in_raw_value_is_still_masked():
+    """★★★★2026-09-04・窓口裁定（事務局が実測で発見した「穴3」）:
+    「値が"*"を含むなら既にマスク済み」という以前の判定は、項目名つき
+    パターン（password= / client_secret: 等）には成立しない。そちらの値は
+    利用者が決める任意文字列で"*"を普通に含みうる。「マスク済みの形」
+    （先頭keep文字以内＋残り全部"*"）で判定し直し、埋め込みの"*"を持つ
+    生の値は素通りしないことを確認する。
+    """
+    samples = [
+        "password = Pa*ssw0rd-Long-Enough-Value-123",
+        "client_secret: ab*cdefghijklmnopqrstuvwxyz",
+    ]
+    for text in samples:
+        assert (
+            count_secrets_in_text(text) >= 1
+        ), f"件数0で素通りしている: {text[:15]}..."
+        masked = mask_secrets_in_text(text)
+        assert masked != text, f"マスクされず素通りしている: {text[:15]}..."
+
+
 def test_mask_and_count_use_the_same_threshold():
     """★★★2026-09-04・事務局(検証役)が実測で発見した、いちばん重い指摘:
     count_secrets_in_text()とmask_secrets_in_text()の判定基準が
