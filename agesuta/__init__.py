@@ -1,6 +1,7 @@
 from .com import log_decorator, CustomLogger
 from .configmanager import ConfigManager
 from .slackapi import SlackPoster
+from .secretmask import mask_secret, mask_secrets_in_text, install_secret_mask
 import os
 
 __all__ = [
@@ -8,6 +9,9 @@ __all__ = [
     "CustomLogger",
     "ConfigManager",
     "SlackPoster",
+    "mask_secret",
+    "mask_secrets_in_text",
+    "install_secret_mask",
 ]
 
 _package_dir = os.path.dirname(__file__)

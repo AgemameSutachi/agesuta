@@ -14,6 +14,8 @@ import zoneinfo
 # 直接は使用しないが、依存関係を保証するためにインポートしておく。
 import tzdata  # noqa: F401
 
+from .secretmask import wrap_formatter
+
 # JSTタイムゾーンオブジェクトの定義
 JST = zoneinfo.ZoneInfo("Asia/Tokyo")
 
@@ -364,7 +366,7 @@ class CustomLogger:
         # ストリームハンドラの設定
         rich_handler: RichHandler = RichHandler(rich_tracebacks=True)
         rich_handler.setLevel(self.showlevel)
-        rich_handler.setFormatter(NoColorFormatter("%(message)s"))
+        rich_handler.setFormatter(wrap_formatter(NoColorFormatter("%(message)s")))
         handlers.append(rich_handler)
 
         # 保存先の有無チェック
@@ -388,8 +390,10 @@ class CustomLogger:
             file_handler.setLevel(DEBUG)
             file_handler.setFormatter(
                 # Formatter("%(asctime)s [%(levelname).4s] %(filename)s %(funcName)s %(lineno)d: %(message)s")
-                NoColorFormatter(
-                    "%(asctime)s [%(levelname)s] %(name)s %(filename)s %(funcName)s %(lineno)d: %(message)s"
+                wrap_formatter(
+                    NoColorFormatter(
+                        "%(asctime)s [%(levelname)s] %(name)s %(filename)s %(funcName)s %(lineno)d: %(message)s"
+                    )
                 )
             )
             handlers.append(file_handler)
@@ -417,8 +421,10 @@ class CustomLogger:
                 logger_temp.setLevel(loggger_dic[i])
                 logger_temp.setFormatter(
                     # Formatter("%(asctime)s [%(levelname).4s] %(filename)s %(funcName)s %(lineno)d: %(message)s")
-                    NoColorFormatter(
-                        "%(asctime)s [%(levelname)s] %(name)s %(filename)s %(funcName)s %(lineno)d: %(message)s"
+                    wrap_formatter(
+                        NoColorFormatter(
+                            "%(asctime)s [%(levelname)s] %(name)s %(filename)s %(funcName)s %(lineno)d: %(message)s"
+                        )
                     )
                 )
                 handlers.append(logger_temp)
