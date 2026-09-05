@@ -127,7 +127,7 @@ def test_keyed_value_wrapped_in_quotes_is_masked():
 
 
 def test_keyword_prefixed_by_variable_name_is_masked():
-    """"gemini_api_key: 'xxx'" のように【変数名がキーワードに"_"で連結
+    """ "gemini_api_key: 'xxx'" のように【変数名がキーワードに"_"で連結
     された形】は見逃していた。キーワード先頭の`\\b`は「単語構成文字
     どうしの境界なし」を意味し、"_"も単語構成文字のため"gemini_"の
     直後の"api_key"には境界が無く、一致自体が起きていなかった
@@ -144,7 +144,7 @@ def test_keyword_prefixed_by_variable_name_is_masked():
 
 
 def test_url_query_bracket_placeholder_is_not_masked():
-    """"?key=[slack_channel]&page=2" のような、値が"["で始まる設定項目名の
+    """ "?key=[slack_channel]&page=2" のような、値が"["で始まる設定項目名の
     プレースホルダ表記は、"?"の直後という位置条件だけでは除外できず
     誤ってマスクされていた。値が"["で始まるものはマッチさせない。
     """
