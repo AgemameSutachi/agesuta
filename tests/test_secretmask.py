@@ -1,12 +1,9 @@
 """ログへの認証情報マスク（agesuta.secretmask）のユニットテスト。
 
-2026-09-04・ユーザー承認済み（窓口経由・案3の①）。working/yt2calendar/
-logmask.py（2026-08-15導入）を持ち上げて共通部品化した際の検証。
-
-★このファイルに実在の値は一切書かない。テスト用の値はすべて連番・
-  アルファベット順など、明らかに架空と分かる形にする（過去にGoogle側は
-  架空の連番なのにSlack側だけ実在のチームID・ボットIDが入っていた実例が
-  あるため、両方とも同じ架空パターンで統一する）。
+このファイルに実在の値は一切書かない。テスト用の値はすべて連番・
+アルファベット順など、明らかに架空と分かる形にする（架空の連番なのに
+一部だけ実在のIDが混じっていると誤って本物の値を書きかねないため、
+すべて同じ架空パターンで統一する）。
 """
 
 import logging
@@ -24,7 +21,7 @@ from agesuta.secretmask import (
 
 
 def test_mask_secret_keeps_head():
-    """先頭6文字だけ残してマスクする（末尾ではない・窓口指示どおり）"""
+    """先頭6文字だけ残してマスクする（末尾ではない）"""
     assert mask_secret("ABCDEFGHIJ") == "ABCDEF****"
     # 短すぎる値は全部隠す
     assert mask_secret("abc") == "***"
@@ -51,7 +48,7 @@ def test_slack_bot_token_is_masked():
 
 
 def test_slack_app_token_is_masked():
-    """Slackアプリレベルトークン(xapp-)も検出してマスクする（窓口指定）"""
+    """Slackアプリレベルトークン(xapp-)も検出してマスクする"""
     token = "xapp" + "-1-A0000000000-1111111111111-abcdefghijklmnopqrstuvwxyz012345"
     masked = mask_secrets_in_text(f"connecting with {token}")
     assert token not in masked
@@ -59,7 +56,7 @@ def test_slack_app_token_is_masked():
 
 
 def test_openai_style_key_is_masked():
-    """sk- 形式のキーは十分な長さがあれば検出してマスクする（窓口指定）"""
+    """sk- 形式のキーは十分な長さがあれば検出してマスクする"""
     key = "sk-" + "abcdefghijklmnopqrstuvwxyz012345"
     masked = mask_secrets_in_text(f"api key: {key}")
     assert key not in masked
@@ -73,14 +70,14 @@ def test_short_sk_prefix_is_not_over_masked():
 
 
 def test_github_pat_is_masked():
-    """GitHub個人アクセストークン(ghp_)を検出してマスクする（窓口指定）"""
+    """GitHub個人アクセストークン(ghp_)を検出してマスクする"""
     token = "ghp_" + "abcdefghijklmnopqrstuvwxyz0123456789"
     masked = mask_secrets_in_text(f"github_token: {token}")
     assert token not in masked
 
 
 def test_generic_tk_token_is_masked():
-    """汎用トークン接頭辞 tk_ を検出してマスクする（窓口指定）"""
+    """汎用トークン接頭辞 tk_ を検出してマスクする"""
     token = "tk_" + "abcdefghijklmnop0123"
     masked = mask_secrets_in_text(f"value={token}")
     assert token not in masked
@@ -114,12 +111,10 @@ def test_request_url_key_parameter_is_masked():
 
 
 def test_keyed_value_wrapped_in_quotes_is_masked():
-    """★★★2026-09-04・実データ突き合わせで発覚: 値が区切りの直後に引用符で
-    始まる形（JSON形式のapi_key: "xxx"等）は、値の文字クラスが引用符を
-    除外しているため一致すら試みず完全に見逃していた。★これは本番稼働中の
-    マスク(138ab24)にも影響する実際の見逃しだった。ダブルクォート・
-    シングルクォートの両方、引用符が前後で保たれたまま値だけ隠れることを
-    確認する。
+    """値が区切りの直後に引用符で始まる形（JSON形式のapi_key: "xxx"等）は、
+    値の文字クラスが引用符を除外しているため一致すら試みず完全に
+    見逃していた。ダブルクォート・シングルクォートの両方、引用符が
+    前後で保たれたまま値だけ隠れることを確認する。
     """
     fake = "a" * 45
     for quote in ('"', "'", ""):
@@ -132,14 +127,11 @@ def test_keyed_value_wrapped_in_quotes_is_masked():
 
 
 def test_keyword_prefixed_by_variable_name_is_masked():
-    """★★★★2026-09-04・実データ(quiz-web-app)突き合わせで発覚(本当の主因):
-    実データで独立実装との差112件を1件ずつ確認したところ、全件が
-    "gemini_api_key: 'xxx'" のように【変数名がキーワードに"_"で連結
-    された形】だった。キーワード先頭の`\\b`は「単語構成文字どうしの
-    境界なし」を意味し、"_"も単語構成文字のため"gemini_"の直後の
-    "api_key"には境界が無く、一致自体が起きていなかった
-    （引用符の見逃しとは別の、独立した原因）。★これも本番稼働中の
-    マスク(138ab24)に影響する実際の見逃しだった。
+    """"gemini_api_key: 'xxx'" のように【変数名がキーワードに"_"で連結
+    された形】は見逃していた。キーワード先頭の`\\b`は「単語構成文字
+    どうしの境界なし」を意味し、"_"も単語構成文字のため"gemini_"の
+    直後の"api_key"には境界が無く、一致自体が起きていなかった
+    （引用符の見逃しとは別の、独立した原因）。
     """
     fake = "b" * 45
     for prefixed_keyword in (f"gemini_api_key: {fake}", f"DB_PASSWORD: {fake}"):
@@ -152,8 +144,7 @@ def test_keyword_prefixed_by_variable_name_is_masked():
 
 
 def test_url_query_bracket_placeholder_is_not_masked():
-    """★★★2026-09-04・事務局(検証役)発見・窓口裁定で修正:
-    "?key=[slack_channel]&page=2" のような、値が"["で始まる設定項目名の
+    """"?key=[slack_channel]&page=2" のような、値が"["で始まる設定項目名の
     プレースホルダ表記は、"?"の直後という位置条件だけでは除外できず
     誤ってマスクされていた。値が"["で始まるものはマッチさせない。
     """
@@ -163,10 +154,9 @@ def test_url_query_bracket_placeholder_is_not_masked():
 
 
 def test_bluesky_app_password_is_masked_via_keyword_not_shape():
-    """★★★★★2026-09-04・窓口裁定: 接頭辞なし・4文字ハイフン区切り4組の形式
-    パターン自体は外した(video hubの実ログでURLスラッグに誤爆・4ファイル238件の
-    実在を確認したため)。実使用のBlueskyアプリパスワード(yt2calendar/
-    blueskyapi.py)は"password"キーとして渡るため、項目名つきパターンで
+    """接頭辞なし・4文字ハイフン区切り4組の形式パターン自体は外した
+    （URLスラッグ等への誤爆が実測で確認されたため）。実使用のアプリ
+    パスワードは"password"キーとして渡るため、項目名つきパターンで
     引き続きマスクされることを確認する。
     """
     app_password = "abcd-efgh-ijkl-mnop"
@@ -175,9 +165,9 @@ def test_bluesky_app_password_is_masked_via_keyword_not_shape():
 
 
 def test_bare_four_by_four_shape_is_no_longer_masked():
-    """★★★★★形式だけ(項目名を伴わない4文字ハイフン区切り4組)は、もう
-    マスクされない(窓口裁定・上記参照)。★この裁定は「いま見つからなかった」
-    であって「存在しない」ではない——将来、値を項目名なしでログへ出す
+    """形式だけ(項目名を伴わない4文字ハイフン区切り4組)は、もう
+    マスクされない(上記参照)。これは「いま見つからなかった」であって
+    「存在しない」ではない——将来、値を項目名なしでログへ出す
     コードが書かれれば、この形では拾えなくなる。
     """
     bare = "abcd-efgh-ijkl-mnop"
@@ -189,10 +179,10 @@ def test_bare_four_by_four_shape_is_no_longer_masked():
 def test_normal_text_is_not_broken():
     """マスク対象でない文字列は変わらない"""
     for text in [
-        "trGJQS-eeEY を processing で更新/挿入しました。",
-        "配信開始: 1/1 ステータス:live 2026/08/14 22:04 -> 2026/08/15 03:55",
-        "2026-08-14T13:04:19Z",
-        "https://www.youtube.com/watch?v=1-NyiwtlG3Q",
+        "abc123-xyz を processing で更新/挿入しました。",
+        "配信開始: 1/1 ステータス:live 2026/01/01 00:00 -> 2026/01/01 01:00",
+        "2026-01-01T00:00:00Z",
+        "https://www.youtube.com/watch?v=aaaaBBBBccc",
     ]:
         assert mask_secrets_in_text(text) == text, f"壊れた: {text}"
 
@@ -208,9 +198,9 @@ def test_count_secrets_counts_raw_tokens():
 
 
 def test_count_secrets_does_not_recount_masked_residue():
-    """★2026-09-04・窓口指摘（相談役発見）: マスク済みの残骸（接頭辞のみ）を
-    生の値として二重に数えない。数えてしまうと「マスクしても検証の一致数が
-    0にならない」——正しく動いても永久に通らない検証になる。
+    """マスク済みの残骸（接頭辞のみ）を生の値として二重に数えない。
+    数えてしまうと「マスクしても検証の一致数が0にならない」——
+    正しく動いても永久に通らない検証になる。
     """
     raw = "slack: xoxb" + "-1111111111111-2222222222222-abcdefghijklmnopqrstuvwx"
     assert count_secrets_in_text(raw) == 1
@@ -223,7 +213,7 @@ def test_count_secrets_does_not_recount_masked_residue():
 
 
 def test_count_secrets_does_not_recount_masked_value_in_keyed_form():
-    """★2026-09-04・実測で発覚した回帰: キー付きパターン(slack_token: xxx)の
+    """キー付きパターン(slack_token: xxx)の
     値グループは伏せ字("*")まで含めて捕らえるため、既にマスク済みの値は
     長さだけでは生の値と見分けが付かない（見かけの長さは元の値と同じに
     なるため）。値に"*"を含むものは数えないこと。
@@ -268,8 +258,7 @@ def test_count_masked_distinguishes_raw_from_masked():
 
 
 def test_mask_secrets_in_text_is_idempotent_across_calls():
-    """★★★2026-09-04・事務局(検証役)が実測で発見した回帰:
-    mask_secrets_in_text()を2回連続で通すと、種別の接頭辞（"xoxb-1"等）
+    """mask_secrets_in_text()を2回連続で通すと、種別の接頭辞（"xoxb-1"等）
     ごと伏せ字に潰れていた（冪等ではなかった）。原因は1回目の残骸
     （keepぴったりの6文字）が2回目でmask_secret()の「短い値は全部隠す」
     分岐に飲まれたため。既存ログへ繰り返し適用しても壊れないことが必須
@@ -283,8 +272,7 @@ def test_mask_secrets_in_text_is_idempotent_across_calls():
 
 
 def test_embedded_asterisk_in_raw_value_is_still_masked():
-    """★★★★2026-09-04・窓口裁定（事務局が実測で発見した「穴3」）:
-    「値が"*"を含むなら既にマスク済み」という以前の判定は、項目名つき
+    """「値が"*"を含むなら既にマスク済み」という以前の判定は、項目名つき
     パターン（password= / client_secret: 等）には成立しない。そちらの値は
     利用者が決める任意文字列で"*"を普通に含みうる。「マスク済みの形」
     （先頭keep文字以内＋残り全部"*"）で判定し直し、埋め込みの"*"を持つ
@@ -303,8 +291,7 @@ def test_embedded_asterisk_in_raw_value_is_still_masked():
 
 
 def test_mask_and_count_use_the_same_threshold():
-    """★★★2026-09-04・事務局(検証役)が実測で発見した、いちばん重い指摘:
-    count_secrets_in_text()とmask_secrets_in_text()の判定基準が
+    """count_secrets_in_text()とmask_secrets_in_text()の判定基準が
     ずれており、「件数0なのに実際には書き換わる」行があった
     （例: "api_key: なし" のような短い値）。数える対象と書き換わる対象を
     一致させる（_is_raw_candidate()に統一）。
