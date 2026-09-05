@@ -7,6 +7,7 @@ from .secretmask import (
     count_secrets_in_text,
     count_masked_in_text,
     install_secret_mask,
+    wrap_formatter,
 )
 import os
 
@@ -20,6 +21,7 @@ __all__ = [
     "count_secrets_in_text",
     "count_masked_in_text",
     "install_secret_mask",
+    "wrap_formatter",
 ]
 
 _package_dir = os.path.dirname(__file__)
