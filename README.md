@@ -87,6 +87,41 @@ logger.critical("これはクリティカルメッセージです。")
 
 関数への入退室およびエラーを自動的に`DEBUG`レベルと`ERROR`レベルでログに記録するためのシンプルなデコレーター（`log_decorator`）が提供されています。
 
+## 認証情報のマスク
+
+ログに出力される文字列の中に、APIキーやトークンの形をしたものが含まれる場合、自動的に伏せ字へ置き換える機能です。
+
+`CustomLogger.log_main()` を呼んでいれば、追加の設定なしで自動的に効きます。素の `logging` を使っている場合は、`install_secret_mask()` をルートロガーへ1度呼ぶことでまとめて後付けできます。個別の `Formatter` にだけ適用したい場合は、`wrap_formatter(既存のFormatter)` でラップしてください。
+
+```python
+from agesuta import install_secret_mask, wrap_formatter
+
+# 素の logging を使っている場合、ルートロガーの全ハンドラへまとめて適用
+install_secret_mask()
+
+# 個別の Formatter にだけ適用したい場合
+handler.setFormatter(wrap_formatter(handler.formatter))
+```
+
+マスクは値の先頭6文字を残し、それ以降を `*` に置き換えます（例: `xoxb-1***...`）。先頭を残すことで、値そのものを明かさずに「どの種類の認証情報か」を障害調査で判別できます。
+
+### 対応している形式
+
+- URLクエリパラメータ（`?key=...`、`&access_token=...` 等）の値
+- 設定ファイル形式（`slack_token: xxx`、`API_KEY = xxx`、JSON形式の `"api_key": "xxx"` 等）の値
+- YouTube Data APIキー（`AIza...`）
+- Slackのボット/ユーザー/アプリトークン（`xoxb-`、`xoxp-`、`xoxa-`、`xoxr-`、`xoxs-`、`xapp-`）
+- OpenAI形式のシークレットキー（`sk-`）
+- GitHubの個人アクセストークン（`ghp_`）
+- 汎用トークン接頭辞（`tk_`）
+
+### 拾えないもの
+
+接頭辞や項目名を手がかりにしているため、次のような値は拾えません。
+
+- 接頭辞を持たない値が、項目名（`password:` 等）を伴わずに単独でログへ出た場合
+- 上記いずれの接頭辞・項目名にも一致しない、独自形式の認証情報
+
 ## ライセンス
 
 このプロジェクトはMITライセンスの下で提供されます - 詳細については LICENSE ファイルを参照してください。
