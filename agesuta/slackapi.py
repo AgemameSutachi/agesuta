@@ -352,6 +352,26 @@ class SlackPoster:
                 self.logger.exception("textpost_exeで例外発生 (Fallback failed)")
                 return ""
 
+    def _image_exe_with_caption(self, exe_func, target, caption, channel, token):
+        """
+        画像投稿を外部実行ファイルで行い、続けて本文(caption)をテキストで投稿します。
+
+        外部実行ファイルは本文を受け取れないため、API失敗時にそのままフォールバック
+        すると画像だけが投稿され本文が失われます。これを防ぐため、画像投稿の成否に
+        かかわらず本文を textpost(API失敗時は textpost_exe)で別途投稿します。
+        """
+        try:
+            return exe_func(target, channel=channel, token=token)
+        finally:
+            if caption:
+                self.logger.info(
+                    "画像投稿をEXEへフォールバックしたため本文を別途投稿します。"
+                )
+                try:
+                    self.textpost(caption, channel=channel, token=token)
+                except Exception:
+                    self.logger.exception("フォールバック時の本文投稿で例外発生")
+
     @log_decorator(logging.getLogger(__name__))
     def imagepost(self, image_path, caption="", channel=None, token=None):
         """
@@ -382,8 +402,12 @@ class SlackPoster:
             # クライアント初期化失敗時はEXEにフォールバック
             self.logger.info("Attempting imagepost using external executable...")
             try:
-                timestamp = self.imagepost_exe(
-                    image_path, channel=current_channel, token=current_token
+                timestamp = self._image_exe_with_caption(
+                    self.imagepost_exe,
+                    image_path,
+                    caption,
+                    current_channel,
+                    current_token,
                 )
                 return timestamp
             except Exception as e:
@@ -403,8 +427,12 @@ class SlackPoster:
                     "Attempting imagepost using external executable (Channel ID not found)..."
                 )
                 try:
-                    timestamp = self.imagepost_exe(
-                        image_path, channel=current_channel, token=current_token
+                    timestamp = self._image_exe_with_caption(
+                        self.imagepost_exe,
+                        image_path,
+                        caption,
+                        current_channel,
+                        current_token,
                     )
                     return timestamp
                 except Exception as e:
@@ -434,8 +462,12 @@ class SlackPoster:
                 "Error posting image - Attempting fallback to executable..."
             )
             try:
-                timestamp = self.imagepost_exe(
-                    image_path, channel=current_channel, token=current_token
+                timestamp = self._image_exe_with_caption(
+                    self.imagepost_exe,
+                    image_path,
+                    caption,
+                    current_channel,
+                    current_token,
                 )
                 return timestamp
             except Exception as e:
@@ -479,8 +511,12 @@ class SlackPoster:
                 "Attempting imagepost_from_url using external executable..."
             )
             try:
-                timestamp = self.imagepost_from_url_exe(
-                    image_url, channel=current_channel, token=current_token
+                timestamp = self._image_exe_with_caption(
+                    self.imagepost_from_url_exe,
+                    image_url,
+                    caption,
+                    current_channel,
+                    current_token,
                 )
                 return timestamp
             except Exception as e:
@@ -505,8 +541,12 @@ class SlackPoster:
                     "Attempting imagepost_from_url using external executable (Channel ID not found)..."
                 )
                 try:
-                    timestamp = self.imagepost_from_url_exe(
-                        image_url, channel=current_channel, token=current_token
+                    timestamp = self._image_exe_with_caption(
+                        self.imagepost_from_url_exe,
+                        image_url,
+                        caption,
+                        current_channel,
+                        current_token,
                     )
                     return timestamp
                 except Exception as e:
@@ -538,8 +578,12 @@ class SlackPoster:
                 "Error posting image from url - Attempting fallback to executable..."
             )
             try:
-                timestamp = self.imagepost_from_url_exe(
-                    image_url, channel=current_channel, token=current_token
+                timestamp = self._image_exe_with_caption(
+                    self.imagepost_from_url_exe,
+                    image_url,
+                    caption,
+                    current_channel,
+                    current_token,
                 )
                 return timestamp
             except Exception as e:
