@@ -25,8 +25,119 @@ except ImportError:
     HAS_REQUESTS = False
 
 from io import BytesIO
+import http.client
+import socket
 import subprocess
 import os
+import time
+import urllib.error
+
+# API 呼び出しの再試行の既定値（初回を含む最大試行回数と、各再試行前の待機秒数）
+DEFAULT_API_MAX_ATTEMPTS = 3
+DEFAULT_API_RETRY_WAITS = (5, 15)
+# Retry-After ヘッダを尊重するときの待機秒数の上限（長すぎる停止を防ぐ）
+MAX_RETRY_AFTER_SECONDS = 60
+
+# 再試行する HTTP ステータス（429 と 5xx）の判定用
+_RATE_LIMIT_STATUS = 429
+
+# 一時的な失敗とみなす Slack API のエラーコード（HTTP 200 で返る場合への備え）
+_TRANSIENT_SLACK_ERROR_CODES = frozenset(
+    {
+        "ratelimited",
+        "internal_error",
+        "fatal_error",
+        "service_unavailable",
+        "request_timeout",
+    }
+)
+
+# 例外の型だけで一時的な失敗と判断できるもの
+# （socket.timeout は 3.10 以降 TimeoutError の別名だが、3.9 では別クラスのため併記する）
+_TRANSIENT_EXCEPTION_TYPES = (
+    TimeoutError,
+    socket.timeout,
+    ConnectionError,
+    http.client.IncompleteRead,
+    ssl.SSLEOFError,
+)
+
+
+def _is_retryable_status(status):
+    """HTTP ステータスが再試行に値する（429 または 5xx）かを返します。"""
+    return isinstance(status, int) and (status == _RATE_LIMIT_STATUS or status >= 500)
+
+
+def is_transient_api_error(exc):
+    """
+    Slack API 呼び出しで発生した例外が、再試行に値する一時的な失敗かを判定します。
+
+    再試行する: タイムアウト・接続断・urllib の URLError・HTTP 429/5xx、
+    および SlackApiError のうち HTTP ステータスが 429/5xx のもの
+    （または ratelimited・internal_error 等の一時的なエラーコード）。
+    再試行しない: invalid_auth・channel_not_found などの恒久的な SlackApiError、
+    ValueError など、やり直しても結果が変わらない失敗。
+
+    Args:
+        exc (BaseException): 判定する例外。
+
+    Returns:
+        bool: 一時的な失敗なら True。
+    """
+    # HTTPError は URLError の派生なので、ステータスで判定するため先に調べる
+    if isinstance(exc, urllib.error.HTTPError):
+        return _is_retryable_status(exc.code)
+    if isinstance(exc, urllib.error.URLError):
+        # 証明書検証の失敗は包まれて届くが、やり直しても直らないので再試行しない
+        return not isinstance(
+            getattr(exc, "reason", None), ssl.SSLCertVerificationError
+        )
+    if isinstance(exc, _TRANSIENT_EXCEPTION_TYPES):
+        return True
+    if SlackApiError is not None and isinstance(exc, SlackApiError):
+        response = getattr(exc, "response", None)
+        if _is_retryable_status(getattr(response, "status_code", None)):
+            return True
+        error_code = None
+        try:
+            error_code = response.get("error") if response is not None else None
+        except Exception:
+            error_code = None
+        return error_code in _TRANSIENT_SLACK_ERROR_CODES
+    return False
+
+
+def _retry_after_seconds(exc):
+    """
+    例外に付随するレスポンスの Retry-After ヘッダ（秒）を返します。無ければ None。
+
+    SlackApiError は response.headers、urllib の HTTPError は headers から読みます。
+    値は MAX_RETRY_AFTER_SECONDS を上限に切り詰めます。
+    """
+    headers = None
+    if isinstance(exc, urllib.error.HTTPError):
+        headers = exc.headers
+    else:
+        headers = getattr(getattr(exc, "response", None), "headers", None)
+    if not headers:
+        return None
+    value = None
+    try:
+        for key in headers:
+            if str(key).lower() == "retry-after":
+                value = headers[key]
+                break
+    except Exception:
+        return None
+    if isinstance(value, (list, tuple)):
+        value = value[0] if value else None
+    try:
+        seconds = float(value)
+    except (TypeError, ValueError):
+        return None
+    if seconds < 0:
+        return None
+    return min(seconds, MAX_RETRY_AFTER_SECONDS)
 
 
 class SlackPoster:
@@ -289,11 +400,71 @@ class SlackPoster:
             )
             return ""
 
+    def _call_api_with_retry(self, api_call, description):
+        """
+        Slack API 呼び出しを、一時的な失敗のときだけ数回やり直して実行します。
+
+        再試行するかは is_transient_api_error で判定し、恒久的な失敗
+        （invalid_auth・channel_not_found 等）は即座に例外を送出します。
+        試行回数を使い切った場合も最後の例外をそのまま送出するため、呼び出し元は
+        従来どおり外部実行ファイルへのフォールバックへ進めます。
+
+        試行回数と待機秒数はインスタンス属性で変更できます。
+        - api_max_attempts (int): 初回を含む最大試行回数（既定 3）
+        - api_retry_waits (Sequence[float]): n 回目の再試行前の待機秒数（既定 5, 15）。
+          再試行回数が要素数を超えた場合は最後の値を使います。
+        429 などで Retry-After ヘッダがあれば、その秒数（上限 60 秒）を優先します。
+
+        注意: HTTP 504 などのタイムアウト系の失敗では、Slack 側では実際には投稿が
+        成功していることがあります。その場合、再試行によって同じ内容が二重に投稿
+        されることがあります（以前から EXE フォールバックでも同じことが起きていました）。
+
+        Args:
+            api_call (Callable[[], Any]): 引数なしで API を呼ぶ関数。試行ごとに呼ばれるため、
+                ストリーム等の使い捨ての引数はこの中で毎回作り直すこと。
+            description (str): ログに出す呼び出し名（例 "files_upload_v2"）。
+
+        Returns:
+            Any: api_call の戻り値。
+        """
+        max_attempts = getattr(self, "api_max_attempts", DEFAULT_API_MAX_ATTEMPTS)
+        retry_waits = getattr(self, "api_retry_waits", DEFAULT_API_RETRY_WAITS)
+        try:
+            max_attempts = max(1, int(max_attempts))
+        except (TypeError, ValueError):
+            max_attempts = DEFAULT_API_MAX_ATTEMPTS
+        retry_waits = list(retry_waits or [])
+
+        for attempt in range(1, max_attempts + 1):
+            try:
+                return api_call()
+            except Exception as e:
+                if attempt >= max_attempts or not is_transient_api_error(e):
+                    raise
+                wait = (
+                    retry_waits[min(attempt - 1, len(retry_waits) - 1)]
+                    if retry_waits
+                    else 0
+                )
+                retry_after = _retry_after_seconds(e)
+                if retry_after is not None:
+                    wait = retry_after
+                self.logger.warning(
+                    f"{description} が一時的な失敗のため再試行します "
+                    f"({attempt}/{max_attempts} 回目が失敗: {type(e).__name__}: {e}) "
+                    f"- {wait} 秒後に再試行"
+                )
+                time.sleep(wait)
+
     @log_decorator(logging.getLogger(__name__))
     def textpost(self, text, channel=None, token=None):
         """
         Slack APIを使用してテキストメッセージを投稿します。
         API失敗時は外部実行ファイルにフォールバックします。
+        タイムアウトや HTTP 429/5xx などの一時的な失敗は、フォールバック前に
+        数回再試行します（詳細は _call_api_with_retry を参照）。
+        504 等では Slack 側で実は投稿が成功していることがあり、再試行により
+        二重投稿になることがあります。
         """
         current_channel = channel if channel is not None else self.channel
         current_token = token if token is not None else self.token
@@ -330,9 +501,13 @@ class SlackPoster:
 
         try:
             # Call the chat.postMessage method using the WebClient
-            result = client_to_use.chat_postMessage(
-                channel=current_channel,
-                text=text,
+            # 一時的な失敗（タイムアウト・5xx 等）は数回やり直してからフォールバックする
+            result = self._call_api_with_retry(
+                lambda: client_to_use.chat_postMessage(
+                    channel=current_channel,
+                    text=text,
+                ),
+                "chat_postMessage",
             )
             timestamp = result["ts"]
             self.logger.info(f"message posted successfully. Timestamp: {timestamp}")
@@ -377,6 +552,10 @@ class SlackPoster:
         """
         Slack APIを使用して画像を投稿します。
         API失敗時は外部実行ファイルにフォールバックします。
+        タイムアウトや HTTP 429/5xx などの一時的な失敗は、フォールバック前に
+        数回再試行します（詳細は _call_api_with_retry を参照）。
+        504 等では Slack 側で実は投稿が成功していることがあり、再試行により
+        二重投稿になることがあります。
         """
         current_channel = channel if channel is not None else self.channel
         current_token = token if token is not None else self.token
@@ -441,8 +620,12 @@ class SlackPoster:
                     )
                     return ""
 
-            response = client_to_use.files_upload_v2(
-                channel=channel_id, file=image_path, initial_comment=caption
+            # 一時的な失敗（タイムアウト・5xx 等）は数回やり直してからフォールバックする
+            response = self._call_api_with_retry(
+                lambda: client_to_use.files_upload_v2(
+                    channel=channel_id, file=image_path, initial_comment=caption
+                ),
+                "files_upload_v2",
             )
             timestamp = ""
             if response["files"]:
@@ -479,6 +662,10 @@ class SlackPoster:
         """
         Slack APIを使用してURLから画像を投稿します。
         API失敗時は外部実行ファイルにフォールバックします。
+        タイムアウトや HTTP 429/5xx などの一時的な失敗は、フォールバック前に
+        数回再試行します（詳細は _call_api_with_retry を参照）。
+        504 等では Slack 側で実は投稿が成功していることがあり、再試行により
+        二重投稿になることがあります。
         """
         if not HAS_REQUESTS:
             raise ImportError(
@@ -555,10 +742,16 @@ class SlackPoster:
                     )
                     return ""
 
-            response = client_to_use.files_upload_v2(
-                channel=channel_id,
-                file=BytesIO(thumbnail_binary),
-                initial_comment=caption,
+            # 画像のダウンロードは再試行せず、アップロードだけを再試行する。
+            # 読み終えたストリームを再利用すると空ファイルになるため、BytesIO は
+            # 試行ごとに作り直す（lambda の中で生成する）。
+            response = self._call_api_with_retry(
+                lambda: client_to_use.files_upload_v2(
+                    channel=channel_id,
+                    file=BytesIO(thumbnail_binary),
+                    initial_comment=caption,
+                ),
+                "files_upload_v2",
             )
             timestamp = ""
             if response["files"]:
